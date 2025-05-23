@@ -74,18 +74,18 @@ class SnakeEnv(gym.Env):
             not (0 <= new_head[1] < GRID_HEIGHT)
         ):
             self.done = True
-            reward = -1.0
+            reward = -100
             return self._get_obs(), reward, True, False, {}
 
         self.snake.insert(0, new_head)
 
         if new_head == self.food:
             self.score += 1
-            reward = 1.0
+            reward = 100
             self._place_food()
         else:
             self.snake.pop()
-            reward = 0.0
+            reward = -0.5
 
         return self._get_obs(), reward, self.done, False, {}
 

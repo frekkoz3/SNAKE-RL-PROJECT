@@ -20,7 +20,7 @@ def argmax_over_dict(dictionary):
     max_key = keys[np.argmax(values)]
     return max_key
 
-def argmax_over_dict_given_subkey(dictionary, sub_key, default = [0, 1, 2]):
+def argmax_over_dict_given_subkey(dictionary, sub_key, default = [0, 1, 2, 3]):
     """
         Input : dictionary, sub_key
         Output : argmax of all the elements in the dictionary sharing the sub_key   
@@ -35,6 +35,18 @@ def argmax_over_dict_given_subkey(dictionary, sub_key, default = [0, 1, 2]):
         for d in default:
             sub_d[(*sub_key, d)] = 0
     return argmax_over_dict(sub_d)
+
+def complete_subkey(dictionary, sub_key, default = [0, 1, 2, 3]):
+    """
+        This function is used to complete a Qstate(s, a) dictionary.
+    """
+    s = 0
+    for d in dictionary:
+        if tuple((d[0], d[1])) == sub_key:
+            s += 1
+    if s < len(default):
+        for d in default:
+            dictionary[(*sub_key, d)] = dictionary[(*sub_key, d)] 
 
 class RLAlgorithm:
     """
@@ -56,20 +68,22 @@ class RLAlgorithm:
         """
         Chooses action at random using an epsilon-greedy policy wrt the current Q(s,a).
         """
+        complete_subkey(self.Qvalues, s, default=[i for i in range (self.action_space)])
         ran = np.random.rand()
         
         if (ran < eps):
-            prob_actions = np.ones(self.action_size)/self.action_size
+            prob_actions = np.ones(self.action_space)/self.action_space
         else:
-            prob_actions = np.zeros(self.action_size)
-            prob_actions[argmax_over_dict_given_subkey(self.Qvalues, (*s, ), default=[i for i in range (self.action_space)])] = 1
+            prob_actions = np.zeros(self.action_space)
+            prob_actions[argmax_over_dict_given_subkey(self.Qvalues, (*s, ), default=[i for i in range (self.action_space)])[2]] = 1
             
         # take one action from the array of actions with the probabilities as defined above.
-        a = np.random.choice(self.action_size, p=prob_actions)
+        a = np.random.choice(self.action_space, p=prob_actions)
         return a 
         
-    def get_action_greedy_policy(self, state):
-        a = argmax_over_dict_given_subkey(self.Qvalues, (*state, ), default=[i for i in range (self.action_space)])
+    def get_action_greedy(self, s):
+        complete_subkey(self.Qvalues, s, default=[i for i in range (self.action_space)])
+        a = argmax_over_dict_given_subkey(self.Qvalues, (*s, ), default=[i for i in range (self.action_space)])[2]
         return a
 
 class Montecarlo(RLAlgorithm):

@@ -10,7 +10,7 @@ from states_bracket import *
 if __name__ == "__main__":
 
     # Environment
-    env = SnakeEnv(render_mode="human")
+    env = SnakeEnv(render_mode="nonhuman")
     # Bracketer
     bracketer = FoodRelativePositionBraket()
     # Sarsa
@@ -31,11 +31,10 @@ if __name__ == "__main__":
 
         env.reset()
         state = bracketer.bracket(env._get_obs())
-        action = SARSA.get_action_epsilon_greedy(state, epsilon)
     
         while not done:
 
-            action = SARSA.get_action_epsilon_greedy(state, eps = epsilon)
+            action = SARSA_p.get_action_epsilon_greedy(state, eps = epsilon)
 
             new_s, reward, done, trunc, inf = env.step(action)
             new_s = bracketer.bracket(new_s)
@@ -51,5 +50,21 @@ if __name__ == "__main__":
             state = new_s
 
             env.render()
+        if i % 100 == 0:
+            print(i)
+    
+    env.close()
+
+    env = SnakeEnv(render_mode="human")
+    
+    done = False
+
+    while not done:
+
+        action = SARSA_p.get_action_greedy(state)
+        state, reward, done, trunc, inf = env.step(action)
+        state = bracketer.bracket(state)
+
+        env.render()
 
     env.close()

@@ -19,7 +19,7 @@ if __name__ == "__main__":
     SARSA_p = SARSA(env.action_space.n, gamma=gamma, lr_v=lr_v)
     epsilon = 0.15
 
-    n_episodes = 2000
+    n_episodes = 100
 
     performance_traj_SARSA = np.zeros(n_episodes)
 

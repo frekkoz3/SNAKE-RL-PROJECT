@@ -46,7 +46,7 @@ class FoodRelativePositionBraket(StateBracket):
 
             This bracketer takes as input the whole grid world. Returns as output the relative position of the food wrt the head of the snake
         """
-        grid, _ = state # this is obtained by the env.step
+        grid = state 
         hx, hy, fx, fy = 0, 0, 0, 0
         for i, row in enumerate(grid):
             for j, cel in enumerate(row):

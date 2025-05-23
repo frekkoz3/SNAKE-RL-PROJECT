@@ -119,16 +119,7 @@ class SnakeEnv(gym.Env):
             self.window = None
 
 if __name__ == "__main__":
-    env = SnakeEnv(render_mode="human")
-    obs, _ = env.reset()
-    done = False
-
-    while not done:
-        action = env.action_space.sample()  # Replace with agent's action
-        obs, reward, done, truncated, info = env.step(action)
-        env.render()
-
-    env.close()
+    pass
 
 
 

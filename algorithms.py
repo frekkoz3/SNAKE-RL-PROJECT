@@ -5,6 +5,7 @@
 
 import numpy as np
 from collections import defaultdict
+import pickle 
 
 def argmax_over_dict(dictionary):
     """
@@ -35,6 +36,34 @@ def argmax_over_dict_given_subkey(dictionary, sub_key, default = [0, 1, 2, 3]):
         for d in default:
             sub_d[(*sub_key, d)] = 0
     return argmax_over_dict(sub_d)
+
+def max_over_dict(dictionary):
+    """
+        Input : dictionary
+        Output : argmax of the dictionary
+        This function retrieve the max in a dictionary.
+    """
+    d = dictionary
+    # Convert the values to a list
+    values = np.array(list(d.values()))
+    # Find the max value
+    return np.max(values)
+
+def max_over_dict_given_subkey(dictionary, sub_key, default = [0, 1, 2, 3]):
+    """
+        Input : dictionary, sub_key
+        Output : argmax of all the elements in the dictionary sharing the sub_key   
+        This is implemented exactly with the subkey being the first two elements of the key of the dictionary, 
+        in which key are tuple of three elements. [ key = (x, y, z), subkey = (x, y)] 
+    """
+    sub_d = defaultdict(int)
+    for d in dictionary:
+        if tuple((d[0], d[1])) == sub_key:
+            sub_d[d] = dictionary[d]
+    if sub_d == {}: # this is used if a new state is sampled (so for all the actions 0 is given as value)
+        for d in default:
+            sub_d[(*sub_key, d)] = 0
+    return max_over_dict(sub_d)
 
 def complete_subkey(dictionary, sub_key, default = [0, 1, 2, 3]):
     """
@@ -86,6 +115,53 @@ class RLAlgorithm:
         a = argmax_over_dict_given_subkey(self.Qvalues, (*s, ), default=[i for i in range (self.action_space)])[2]
         return a
 
+    def save(self, path):
+        with open(f"{path}.pkl", 'wb') as f:
+            pickle.dump(self.Qvalues, f)
+    
+    def upload(self, path):
+        with open(f"{path}.pkl", 'rb') as f:
+            self.Qvalues = pickle.load(f)
+
+    def learning(self, env, eps, n_episodes, bracketer):
+
+        performance_traj = np.zeros(n_episodes)
+
+        state, _ = env.reset()
+
+        for i in range(n_episodes):
+
+            done = False
+            keep = True
+
+            env.reset()
+            state = bracketer.bracket(env._get_obs())
+            action = self.get_action_epsilon_greedy(state, eps = eps)
+
+            while not done and keep:
+
+                new_s, reward, done, trunc, inf = env.step(action)
+                if inf != {}:
+                    action = inf["act"]
+                new_s = bracketer.bracket(new_s)
+                
+                # Keeps track of performance for each episode
+                performance_traj[i] += reward
+                
+                new_a = self.get_action_epsilon_greedy(new_s, eps)
+
+                self.single_step_update(state, action, reward, new_s, new_a, done)
+                
+                action = new_a
+                state = new_s
+
+                keep = env.render()
+
+            if i % 500 == 0:
+                print(i)
+
+        env.close()
+
 class Montecarlo(RLAlgorithm):
     
     def __init__(self, env):
@@ -111,6 +187,29 @@ class SARSA(RLAlgorithm):
         else:
             # SARSA: deltaQ = R + gamma*Q(new_s, new_a) - Q(s,a)
             deltaQ = r + self.gamma*self.Qvalues[(*new_s, new_a)] - self.Qvalues[(*s, a)]
+            
+        self.Qvalues[(*s, a)] += self.lr_v * deltaQ
+
+class QLearning(RLAlgorithm):
+
+    def __init__(self, action_space, gamma=1, lr_v=0.01):
+        super().__init__(action_space)
+        # the discount factor
+        self.gamma = gamma
+        # the learning rate
+        self.lr_v = lr_v
+    
+    def single_step_update(self, s, a, r, new_s, new_a, done):
+        """
+        Uses a single step to update the values, using Temporal Difference for Q values.
+        Employs the EXPERIENCED action in the new state  <- Q(S_new, A_new).
+        """
+        if done:
+            # QLearning: deltaQ = R - Q(s,a)
+            deltaQ = r - self.Qvalues[(*s, a)]
+        else:
+            # QLearning: deltaQ = R + gamma*maxQ(*new_s,) - Q(s,a)
+            deltaQ = r + self.gamma*max_over_dict_given_subkey(self.Qvalues, (*new_s,), default=[i for i in range (self.action_space)]) - self.Qvalues[(*s, a)]
             
         self.Qvalues[(*s, a)] += self.lr_v * deltaQ
 

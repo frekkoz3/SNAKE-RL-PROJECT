@@ -14,12 +14,12 @@ if __name__ == "__main__":
     # Bracketer
     bracketer = FoodRelativePositionBraket()
     # Sarsa
-    gamma = 0.9
+    gamma = 0.8
     lr_v = 0.15
     SARSA_p = SARSA(env.action_space.n, gamma=gamma, lr_v=lr_v)
-    epsilon = 0.15
+    epsilon = 0.4
 
-    n_episodes = 100
+    n_episodes = 1000
 
     performance_traj_SARSA = np.zeros(n_episodes)
 
@@ -32,29 +32,31 @@ if __name__ == "__main__":
 
         env.reset()
         state = bracketer.bracket(env._get_obs())
-    
+        action = SARSA_p.get_action_epsilon_greedy(state, eps = epsilon)
+
         while not done and keep:
 
-            action = SARSA_p.get_action_epsilon_greedy(state, eps = epsilon)
-
             new_s, reward, done, trunc, inf = env.step(action)
+            if inf != {}:
+                print("Action corrected ")
+                action = inf["act"]
             new_s = bracketer.bracket(new_s)
             
             # Keeps track of performance for each episode
             performance_traj_SARSA[i] += reward
             
             new_a = SARSA_p.get_action_epsilon_greedy(new_s, epsilon)
-    
+
             SARSA_p.single_step_update(state, action, reward, new_s, new_a, done)
             
             action = new_a
             state = new_s
 
             keep = env.render()
-
-        if i % 100 == 0:
+        """if i % 500 == 0:
             print(i)
-    
+            print_q_value(SARSA_p.Qvalues)"""
+
     env.close()
 
     env = SnakeEnv(render_mode="human")

@@ -17,7 +17,7 @@ WIDTH, HEIGHT = GRID_WIDTH * CELL_SIZE, GRID_HEIGHT * CELL_SIZE
 class SnakeEnv(gym.Env):
     metadata = {"render_modes": ["human"], "render_fps": 10}
 
-    def __init__(self, render_mode=None):
+    def __init__(self, render_mode=None, max_step = 1000):
         self.action_space = spaces.Discrete(4)  # 0=UP, 1=DOWN, 2=LEFT, 3=RIGHT
         self.observation_space = spaces.Box(
             low=0, high=3, shape=(GRID_HEIGHT, GRID_WIDTH), dtype=np.uint8
@@ -25,6 +25,8 @@ class SnakeEnv(gym.Env):
         self.render_mode = render_mode
         self.window = None
         self.clock = None
+        self.total_step = 0
+        self.max_step = max_step
         self.reset()
 
     def reset(self, seed=None, options=None):
@@ -34,7 +36,9 @@ class SnakeEnv(gym.Env):
         self._place_food()
         self.done = False
         self.score = 0
-        return self._get_obs(), {}
+        self.total_step = 0
+        self.info = {}
+        return self._get_obs(), self.info
 
     def _place_food(self):
         while True:
@@ -53,8 +57,11 @@ class SnakeEnv(gym.Env):
         return grid
 
     def step(self, action):
+        self.info = {}
         if self.done:
-            return self._get_obs(), 0.0, True, False, {}
+            return self._get_obs(), 0.0, True, False, self.info
+        
+        self.total_step += 1
 
         directions = [(0, -1), (0, 1), (-1, 0), (1, 0)]
         new_dir = directions[action]
@@ -62,6 +69,8 @@ class SnakeEnv(gym.Env):
         # Prevent reversing
         if (new_dir[0] * -1, new_dir[1] * -1) != self.direction:
             self.direction = new_dir
+        else:
+            self.info = {"act" : directions.index(self.direction)}
 
         head_x, head_y = self.snake[0]
         dx, dy = self.direction
@@ -75,7 +84,7 @@ class SnakeEnv(gym.Env):
         ):
             self.done = True
             reward = -10
-            return self._get_obs(), reward, True, False, {}
+            return self._get_obs(), reward, True, False, self.info
 
         self.snake.insert(0, new_head)
 
@@ -85,9 +94,15 @@ class SnakeEnv(gym.Env):
             self._place_food()
         else:
             self.snake.pop()
-            reward = -0.5
+            reward = -1
 
-        return self._get_obs(), reward, self.done, False, {}
+        if self.total_step > self.max_step:
+            self.done = True # this should be truncated 
+            truncated = True
+            reward = 0
+            return self._get_obs(), reward, self.done, truncated, self.info
+
+        return self._get_obs(), reward, self.done, False, self.info
 
     def render(self):
         if self.render_mode != "human":

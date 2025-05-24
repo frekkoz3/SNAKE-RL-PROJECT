@@ -91,12 +91,18 @@ class SnakeEnv(gym.Env):
 
     def render(self):
         if self.render_mode != "human":
-            return
+            return True
+        
         if self.window is None:
             pygame.init()
             self.window = pygame.display.set_mode((WIDTH, HEIGHT))
             pygame.display.set_caption("Snake Environment")
             self.clock = pygame.time.Clock()
+        
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                self.close()
+                return False
 
         self.window.fill((0, 0, 0))
 
@@ -112,6 +118,8 @@ class SnakeEnv(gym.Env):
 
         pygame.display.flip()
         self.clock.tick(self.metadata["render_fps"])
+
+        return True
 
     def close(self):
         if self.window:

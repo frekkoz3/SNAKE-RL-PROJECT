@@ -28,11 +28,12 @@ if __name__ == "__main__":
     for i in range(n_episodes):
 
         done = False
+        keep = True
 
         env.reset()
         state = bracketer.bracket(env._get_obs())
     
-        while not done:
+        while not done and keep:
 
             action = SARSA_p.get_action_epsilon_greedy(state, eps = epsilon)
 
@@ -49,7 +50,8 @@ if __name__ == "__main__":
             action = new_a
             state = new_s
 
-            env.render()
+            keep = env.render()
+
         if i % 100 == 0:
             print(i)
     
@@ -58,13 +60,14 @@ if __name__ == "__main__":
     env = SnakeEnv(render_mode="human")
     
     done = False
+    keep = True
 
-    while not done:
+    while not done and keep:
 
         action = SARSA_p.get_action_greedy(state)
         state, reward, done, trunc, inf = env.step(action)
         state = bracketer.bracket(state)
 
-        env.render()
+        keep = env.render()
 
     env.close()

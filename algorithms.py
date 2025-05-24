@@ -124,7 +124,7 @@ class RLAlgorithm:
             self.Qvalues = pickle.load(f)
 
     def learning(self, env, eps, n_episodes, bracketer):
-
+        
         performance_traj = np.zeros(n_episodes)
 
         state, _ = env.reset()
@@ -159,6 +159,21 @@ class RLAlgorithm:
 
             if i % 500 == 0:
                 print(i)
+
+        env.close()
+
+    def play(self, env, bracketer):
+        done = False
+        keep = True
+
+        state, _ = env.reset()
+        state = bracketer.bracket(state)
+
+        while not done and keep:
+            action = self.get_action_greedy(state)
+            state, reward, done, trunc, inf = env.step(action)
+            state = bracketer.bracket(state)
+            keep = env.render()
 
         env.close()
 

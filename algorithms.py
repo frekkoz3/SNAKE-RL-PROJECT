@@ -177,6 +177,12 @@ class RLAlgorithm:
 
         env.close()
 
+    def __str__(self):
+        s = ""
+        for d in self.Qvalues:
+            s = s + f"State ({d[0]}, {d[1]}), Action {d[2]} : Value {self.Qvalues[d]}\n"
+        return s
+    
 class Montecarlo(RLAlgorithm):
     
     def __init__(self, env):

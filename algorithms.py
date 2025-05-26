@@ -316,7 +316,8 @@ class Montecarlo(RLAlgorithm):
                 # Keeps track of performance for each episode
                 performance_traj[i] += reward
 
-                episode.append((state, action, reward))
+                episode.append((state, action, reward)
+
 
                 new_a = self.get_action_epsilon_greedy(new_s, eps, possible_actions)
 

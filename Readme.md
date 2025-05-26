@@ -52,4 +52,8 @@ Here we try to solve the Snake game using different approaches.
 
 --- 
 ## TODO
+- Implement Monte Carlo
+- Implement Double QLearning
+- Implement dynamic parameters
+- Implement dynamic learning bracket
 

@@ -37,6 +37,20 @@ def argmax_over_dict_given_subkey(dictionary, sub_key, default = [0, 1, 2, 3]):
             sub_d[(*sub_key, d)] = 0
     return argmax_over_dict(sub_d)
 
+def argmax_over_dict_given_subkey_and_possible_action(dictionary, sub_key, possible_action = [0, 1, 2, 3], default = [0, 1, 2, 3]):
+    """
+        Input : dictionary, sub_key
+        Output : argmax of all the elements in the dictionary sharing the sub_key   
+        This is implemented exactly with the subkey being the first two elements of the key of the dictionary, 
+        in which key are tuple of three elements. [ key = (x, y, z), subkey = (x, y)] 
+    """
+    complete_subkey(dictionary, sub_key, default)
+    sub_d = defaultdict(int)
+    for d in dictionary:
+        if tuple((d[0], d[1])) == sub_key and d[2] in possible_action:
+            sub_d[d] = dictionary[d]
+    return argmax_over_dict(sub_d)
+
 def max_over_dict(dictionary):
     """
         Input : dictionary
@@ -56,13 +70,11 @@ def max_over_dict_given_subkey(dictionary, sub_key, default = [0, 1, 2, 3]):
         This is implemented exactly with the subkey being the first two elements of the key of the dictionary, 
         in which key are tuple of three elements. [ key = (x, y, z), subkey = (x, y)] 
     """
+    complete_subkey(dictionary, sub_key, default)
     sub_d = defaultdict(int)
     for d in dictionary:
         if tuple((d[0], d[1])) == sub_key:
             sub_d[d] = dictionary[d]
-    if sub_d == {}: # this is used if a new state is sampled (so for all the actions 0 is given as value)
-        for d in default:
-            sub_d[(*sub_key, d)] = 0
     return max_over_dict(sub_d)
 
 def complete_subkey(dictionary, sub_key, default = [0, 1, 2, 3]):
@@ -77,6 +89,16 @@ def complete_subkey(dictionary, sub_key, default = [0, 1, 2, 3]):
         for d in default:
             dictionary[(*sub_key, d)] = dictionary[(*sub_key, d)] 
 
+def opposite_action(action):
+    """
+        Input : an action in the space [0, 1, 2, 3]
+        Output : an action in the space [0, 1, 2, 3]
+        This function returns the opposite action to the one already taken.
+        The rule is the following : 0 and 1 are opposite, 2 and 3 are opposite
+    """
+    shift = (action%2==0 - 1) + (action%2 == 0)
+    return action + shift
+    
 class RLAlgorithm:
     """
         This is the generic class for an RL Algorithm using gymnasium environment
@@ -110,9 +132,12 @@ class RLAlgorithm:
         a = np.random.choice(self.action_space, p=prob_actions)
         return a 
         
-    def get_action_greedy(self, s):
-        complete_subkey(self.Qvalues, s, default=[i for i in range (self.action_space)])
-        a = argmax_over_dict_given_subkey(self.Qvalues, (*s, ), default=[i for i in range (self.action_space)])[2]
+    def get_action_greedy(self, s, possible_action = None):
+        if possible_action == None:
+            complete_subkey(self.Qvalues, s, default=[i for i in range (self.action_space)])
+            a = argmax_over_dict_given_subkey(self.Qvalues, (*s, ), default=[i for i in range (self.action_space)])[2]
+        else:
+            a = argmax_over_dict_given_subkey_and_possible_action(self.Qvalues, (*s, ), possible_action, default=[i for i in range (self.action_space)])[2]
         return a
 
     def save(self, path):
@@ -169,8 +194,14 @@ class RLAlgorithm:
         state, _ = env.reset()
         state = bracketer.bracket(state)
 
+        possible_action = [0, 1, 2, 3]
+        last_action = None
+
         while not done and keep:
-            action = self.get_action_greedy(state)
+            if last_action != None:
+                possible_action = [0, 1, 2, 3]
+                possible_action.remove(opposite_action(last_action))
+            action = self.get_action_greedy(state, possible_action)
             state, reward, done, trunc, inf = env.step(action)
             state = bracketer.bracket(state)
             keep = env.render()

@@ -12,7 +12,7 @@ CELL_SIZE = 20
 GRID_WIDTH, GRID_HEIGHT = 20, 20  # 400x300 if CELL_SIZE=20
 WIDTH, HEIGHT = GRID_WIDTH * CELL_SIZE, GRID_HEIGHT * CELL_SIZE
 
-# In this environment the snake takes -1 for moving and 0 for eating
+# In this environment the snake takes -1 for moving, -5 for dying, 10 for eating
 
 class SnakeEnv(gym.Env):
     metadata = {"render_modes": ["human"], "render_fps": 10}
@@ -56,6 +56,16 @@ class SnakeEnv(gym.Env):
         grid[food_y, food_x] = 1 # 1 for the food of the snake
         return grid
 
+    def get_possible_actions(self, action):
+        """
+        Returns all the possible actions given the current one.
+        """
+        if action is None:
+            return list(range(self.action_space.n))
+        forbidden_action = {0:1, 1:0, 2:3, 3:2}[action]  # Prevent reversing direction
+        possible_actions = [i for i in range(self.action_space.n) if i != forbidden_action]
+        return possible_actions
+
     def step(self, action):
         self.info = {}
         if self.done:
@@ -83,14 +93,14 @@ class SnakeEnv(gym.Env):
             not (0 <= new_head[1] < GRID_HEIGHT)
         ):
             self.done = True
-            reward = -10
+            reward = -5
             return self._get_obs(), reward, True, False, self.info
 
         self.snake.insert(0, new_head)
 
         if new_head == self.food:
             self.score += 1
-            reward = 100
+            reward = 10
             self._place_food()
         else:
             self.snake.pop()
@@ -99,7 +109,7 @@ class SnakeEnv(gym.Env):
         if self.total_step > self.max_step:
             self.done = True # this should be truncated 
             truncated = True
-            reward = 0
+            reward = -2
             return self._get_obs(), reward, self.done, truncated, self.info
 
         return self._get_obs(), reward, self.done, False, self.info

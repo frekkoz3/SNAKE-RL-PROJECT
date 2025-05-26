@@ -17,7 +17,7 @@ class StateBracket():
             This leads the total space to something like 4xnxn.
             This is great. 
             This is not always so easy, but this is the idea.
-            Once you have defined the rule for the braket (that is, given a state, in wich cluster do I map it?), the game is done.
+            Once you have defined the rule for the bracket (that is, given a state, in which cluster do I map it?), the game is done.
             Well, if you do stupid bracketing you can fuck up your solution.
             Good Luck finding your best brackets!
     """
@@ -32,7 +32,14 @@ class StateBracket():
         """
         pass
 
-class FoodRelativePositionBraket(StateBracket):
+    def get_state_dim(self):
+        """
+            Output: the dimension of the state representation
+        """
+        pass
+
+
+class FoodRelativePositionBracket(StateBracket):
     """
         Specific State Bracket for the snake game.
     """
@@ -57,5 +64,12 @@ class FoodRelativePositionBraket(StateBracket):
                     fx = j
                     fy = i
         return (fx - hx, fy - hy)
+
+    def get_state_dim(self):
+        """
+            Returns the dimension of the state space.
+            In this case, the relative position of the food wrt the head of the snake can be represented as a 2D vector.
+        """
+        return 2
 
 

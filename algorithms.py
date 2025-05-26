@@ -7,6 +7,11 @@ import numpy as np
 from collections import defaultdict
 import pickle 
 
+""" 
+    The protocol for the (state, action) representation is that the action must always be the last element of the key. 
+    This means that, given the key, the action is always key[-1] (since the key is a tuple accisible by indexes).
+"""
+
 def argmax_over_dict(dictionary):
     """
         Input : dictionary
@@ -126,7 +131,7 @@ class RLAlgorithm:
             prob_actions = np.ones(self.action_space)/self.action_space
         else:
             prob_actions = np.zeros(self.action_space)
-            prob_actions[argmax_over_dict_given_subkey(self.Qvalues, (*s, ), default=[i for i in range (self.action_space)])[2]] = 1
+            prob_actions[argmax_over_dict_given_subkey(self.Qvalues, (*s, ), default=[i for i in range (self.action_space)])[-1]] = 1
             
         # take one action from the array of actions with the probabilities as defined above.
         a = np.random.choice(self.action_space, p=prob_actions)
@@ -135,9 +140,9 @@ class RLAlgorithm:
     def get_action_greedy(self, s, possible_action = None):
         if possible_action == None:
             complete_subkey(self.Qvalues, s, default=[i for i in range (self.action_space)])
-            a = argmax_over_dict_given_subkey(self.Qvalues, (*s, ), default=[i for i in range (self.action_space)])[2]
+            a = argmax_over_dict_given_subkey(self.Qvalues, (*s, ), default=[i for i in range (self.action_space)])[-1]
         else:
-            a = argmax_over_dict_given_subkey_and_possible_action(self.Qvalues, (*s, ), possible_action, default=[i for i in range (self.action_space)])[2]
+            a = argmax_over_dict_given_subkey_and_possible_action(self.Qvalues, (*s, ), possible_action, default=[i for i in range (self.action_space)])[-1]
         return a
 
     def save(self, path):

@@ -492,8 +492,8 @@ class DeepDoubleQLearning(RLAlgorithm):
             next_q_values = self.dqn_target(next_states).gather(1, next_actions).squeeze(1)
 
             # Compute the expected q_values
-            target_q_values = rewards + self.gamma * next_q_values * (1-dones) # col fatto che target_q_values è computato in no_grad questo non blocca poi la backpropagation ?
-
+            target_q_values = rewards + self.gamma * next_q_values * (1-dones) 
+            
         # Compute the loss
         loss = F.mse_loss(current_q_values, target_q_values)
 

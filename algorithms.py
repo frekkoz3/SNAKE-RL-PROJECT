@@ -12,7 +12,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 import scipy
 
-
 def argmax_over_dict(dictionary):
     """
         Input : dictionary
@@ -124,7 +123,25 @@ def discount_cumsum(x, discount):
     """
     return scipy.signal.lfilter([1], [1, float(-discount)], x[::-1], axis=0)[::-1]
 
-
+class Epsilon:
+    def __init__(self, eps, decay_mode = "costant", **kwargs):
+        """
+            Possible decaying mode : 
+            - costant (fixing an epsilon over time)
+            - linear (the parameters "coef" and "minimum" are needed while calling this) eps = max(coef*eps, minimum)
+        """
+        self.eps = eps
+        self.decay_mode = decay_mode
+        self.kwargs = kwargs
+    
+    def decay(self, **kwargs): # We could possibly use a kwargs as argument if needed for some decay method
+        if self.decay_mode == "costant":
+            self.eps = self.eps
+            return self.eps
+        if self.decay_mode == "linear":
+            self.eps = max(self.kwargs["coef"]*self.eps, self.kwargs["minimum"])
+            return self.eps
+        
 class DQN(nn.Module):
     """
     Deep Q_network for approximating Q-values.
@@ -247,7 +264,7 @@ class RLAlgorithm:
 
             if i % 500 == 0:
                 print(i)
-            eps = max(eps * 0.99, 0.05)  # Decay epsilon
+            eps = max(0.99*eps, 0.05)  # Decay epsilon
 
         env.close()
 
@@ -385,9 +402,6 @@ class QLearning(RLAlgorithm):
             
         self.Qvalues[(*s, a)] += self.lr_v * deltaQ
 
-
-
-
 class DeepDoubleQLearning(RLAlgorithm):
     """
     This algorithm implements Deep Double Q-learning by using a Deep Q-Network (DQN) to approximate the Q-values.
@@ -409,13 +423,9 @@ class DeepDoubleQLearning(RLAlgorithm):
 
         self.optimizer = torch.optim.Adam(self.dqn_online.parameters(), lr=self.lr_v)
 
-
         # Initialize the target network with the same weights as the online network
         self.dqn_target.load_state_dict(self.dqn_online.state_dict())
         self.dqn_target.eval()
-
-
-
 
     def get_action_epsilon_greedy(self, state, eps, possible_actions=None):
         if np.random.rand() < eps:
@@ -427,7 +437,8 @@ class DeepDoubleQLearning(RLAlgorithm):
         else: # Exploit
             s_tensor = torch.tensor(state, dtype=torch.float32, device=self.device).unsqueeze(0)
             with torch.no_grad():
-                q_values_all = self.dqn_online(s_tensor)[0]  # Q-values for state s, shape [action_dim]
+                q_values_all = self.dqn_online(s_tensor)[0]  # Q-values for state s, shape [action_dim] 
+                # this s is in the format (state, action) ? frekko
 
             if possible_actions is None or len(possible_actions) == 0:
                 return q_values_all.argmax().item()
@@ -481,7 +492,7 @@ class DeepDoubleQLearning(RLAlgorithm):
             next_q_values = self.dqn_target(next_states).gather(1, next_actions).squeeze(1)
 
             # Compute the expected q_values
-            target_q_values = rewards + self.gamma * next_q_values * (1-dones)
+            target_q_values = rewards + self.gamma * next_q_values * (1-dones) # col fatto che target_q_values è computato in no_grad questo non blocca poi la backpropagation ?
 
         # Compute the loss
         loss = F.mse_loss(current_q_values, target_q_values)
@@ -500,5 +511,5 @@ class DeepDoubleQLearning(RLAlgorithm):
 
 
 if __name__ == "__main__":
-    q = {(0, 0, 1) : 1, (0, 0, 2) : 2, (0, 1, 1) : 3}
-    print(argmax_over_dict_given_subkey(q, (0, 2), [1, 2]))
+    eps = Epsilon(0.99, "linear", **{"coef" : 0.9, "minimum" : 0.05})
+    print(eps.decay())

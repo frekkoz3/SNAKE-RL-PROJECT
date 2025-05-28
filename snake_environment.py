@@ -17,7 +17,15 @@ WIDTH, HEIGHT = GRID_WIDTH * CELL_SIZE, GRID_HEIGHT * CELL_SIZE
 class SnakeEnv(gym.Env):
     metadata = {"render_modes": ["human"], "render_fps": 10}
 
-    def __init__(self, render_mode=None, max_step = 1000, reward_food=10, reward_death=-10, reward_step=-1):
+    def __init__(self, render_mode=None, max_step = 1000, **kwargs):
+        """
+            This is the class implementing the gymnasium protocol for the snake environment. 
+            As input there are the render mode and the maximum amount of step.
+            If wanted one can also pass (in a **dictionary) :
+                reward_food, the reward for eating food
+                reward_death, the reward for dying
+                reward_step, the reward givern at each step
+        """
         self.action_space = spaces.Discrete(4)  # 0=UP, 1=DOWN, 2=LEFT, 3=RIGHT
         self.observation_space = spaces.Box(
             low=0, high=3, shape=(GRID_HEIGHT, GRID_WIDTH), dtype=np.uint8
@@ -28,9 +36,14 @@ class SnakeEnv(gym.Env):
         self.total_step = 0
         self.max_step = max_step
         self.reset()
-        self.reward_food = reward_food
-        self.reward_death = reward_death
-        self.reward_step = reward_step
+        if kwargs == {}:
+            self.reward_food = 10
+            self.reward_death = -10
+            self.reward_step = -1
+        else:
+            self.reward_food = kwargs["reward_food"]
+            self.reward_death = kwargs["reward_death"]
+            self.reward_step = kwargs["reward_step"]
         
 
     def reset(self, seed=None, options=None):

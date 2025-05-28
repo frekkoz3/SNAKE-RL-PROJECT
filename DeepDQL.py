@@ -110,10 +110,6 @@ class DeepDQL:
         start = time.time()
 
         buffer = self.ReplayBuffer(capacity=buffer_capacity, device=self.device)     #replay buffer, which creates tensor in device
-
-
-
-
         returns = np.zeros(n_traj)     #we store the performance for every trajectory
         best_return = 0
 
@@ -172,7 +168,6 @@ class DeepDQL:
                     self.optimizer.zero_grad()
                     loss.backward()
                     self.optimizer.step()
-
 
                 state = next_state      #we move to the next step
 
@@ -237,12 +232,15 @@ class DeepDQL:
             self.env.render()
             state = next_state
 
+if __name__ == "__main__":
+    # questo è necessario se poi questa cosa verrà chiamata al di fuori di questo file
+    # cosa che succederà nel momento in cui si chiama nel main.ipynb
 
-env = gym.make("CartPole-v1")
+    env = gym.make("CartPole-v1")
 
-deepDQL = DeepDQL(env, NN)
+    deepDQL = DeepDQL(env, NN)
 
-returns = deepDQL.learnQ(n_traj = 700, n_traj_for_Qtarget_update=30, batch_size=150)
-deepDQL.evaluation_averaged()
-plt.plot(returns)
-plt.show()
+    returns = deepDQL.learnQ(n_traj = 700, n_traj_for_Qtarget_update=30, batch_size=150)
+    deepDQL.evaluation_averaged()
+    plt.plot(returns)
+    plt.show()

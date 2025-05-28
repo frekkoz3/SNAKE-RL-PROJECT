@@ -17,7 +17,7 @@ WIDTH, HEIGHT = GRID_WIDTH * CELL_SIZE, GRID_HEIGHT * CELL_SIZE
 class SnakeEnv(gym.Env):
     metadata = {"render_modes": ["human"], "render_fps": 10}
 
-    def __init__(self, render_mode=None, max_step = 1000):
+    def __init__(self, render_mode=None, max_step = 1000, reward_food=10, reward_death=-10, reward_step=-1):
         self.action_space = spaces.Discrete(4)  # 0=UP, 1=DOWN, 2=LEFT, 3=RIGHT
         self.observation_space = spaces.Box(
             low=0, high=3, shape=(GRID_HEIGHT, GRID_WIDTH), dtype=np.uint8
@@ -28,11 +28,18 @@ class SnakeEnv(gym.Env):
         self.total_step = 0
         self.max_step = max_step
         self.reset()
+        self.reward_food = reward_food
+        self.reward_death = reward_death
+        self.reward_step = reward_step
+        
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
-        self.snake = [(5, 5)]
-        self.direction = (1, 0)
+        
+        #initial conditions are random
+        self.snake = [(random.randrange(GRID_HEIGHT), random.randrange(GRID_WIDTH))]
+        self.direction = random.choice([(1, 0), (1, 0), (-1, 0), (0, -1)])
+        
         self._place_food()
         self.done = False
         self.score = 0
@@ -93,18 +100,18 @@ class SnakeEnv(gym.Env):
             not (0 <= new_head[1] < GRID_HEIGHT)
         ):
             self.done = True
-            reward = -5
+            reward = self.reward_death
             return self._get_obs(), reward, True, False, self.info
 
         self.snake.insert(0, new_head)
 
         if new_head == self.food:
             self.score += 1
-            reward = 10
+            reward = self.reward_food
             self._place_food()
         else:
             self.snake.pop()
-            reward = -1
+            reward = self.reward_step
 
         if self.total_step > self.max_step:
             self.done = True # this should be truncated 

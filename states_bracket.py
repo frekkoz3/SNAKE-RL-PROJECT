@@ -130,6 +130,78 @@ class VonNeumann1NeighPlusFoodRelPosBracket(StateBracket):
     
     def __str__(self):
         return "VN1+FRP"
+    
+class FoodDirectionBracket(StateBracket):
+    """
+        Specific State Bracket for the snake game.
+    """
+
+    def bracket(self, state):
+        """
+            Input : generic state
+            Output : some feature of the state representing the bracket containing the state
+
+            This bracketer takes as input the whole grid world. Returns as output the direction of the food wrt the head of the snake
+            so it is (s, e, n, w)
+        """
+        grid = state 
+        hx, hy, fx, fy = 0, 0, 0, 0
+        for i, row in enumerate(grid):
+            for j, cel in enumerate(row):
+                if cel == 2: # head has value 2
+                    hx = j
+                    hy = i
+                if cel == 1: # food has value 1
+                    fx = j
+                    fy = i
+
+        return (int(hy < fy), int(hx < fx), int(hy > fy), int(hx > fx))
+
+    def get_state_dim(self):
+        """
+            Returns the dimension of the state space.
+            In this case, the relative position of the food wrt the head of the snake can be represented as a 2D vector.
+        """
+        return 4
+    
+    def __str__(self):
+        return "FD"
+
+class VonNeumann1NeighPlusFoodDirectionBracket(StateBracket):
+    """
+        Specific State Bracket for the snake game.
+    """
+
+    def bracket(self, state):
+        """
+            Input : generic state
+            Output : some feature of the state representing the bracket containing the state
+
+            This bracketer takes as input the whole grid world. Returns as output the direction of the food wrt the head of the snake
+            so it is (s, e, n, w)
+        """
+        grid = state 
+        hx, hy, fx, fy = 0, 0, 0, 0
+        for i, row in enumerate(grid):
+            for j, cel in enumerate(row):
+                if cel == 2: # head has value 2
+                    hx = j
+                    hy = i
+                if cel == 1: # food has value 1
+                    fx = j
+                    fy = i
+
+        return (int(hy < fy), int(hx < fx), int(hy > fy), int(hx > fx), *von_neumann_neigh_radius_1(grid, [hy, hx]))
+
+    def get_state_dim(self):
+        """
+            Returns the dimension of the state space.
+            In this case, the relative position of the food wrt the head of the snake can be represented as a 2D vector.
+        """
+        return 4
+    
+    def __str__(self):
+        return "VN1+FD"
 
 if __name__ == "__main__":
     grid = [[0, 3, 3, 3], 

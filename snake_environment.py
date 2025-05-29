@@ -17,7 +17,7 @@ WIDTH, HEIGHT = GRID_WIDTH * CELL_SIZE, GRID_HEIGHT * CELL_SIZE
 class SnakeEnv(gym.Env):
     metadata = {"render_modes": ["human"], "render_fps": 10}
 
-    def __init__(self, render_mode=None, max_step = 1000, **kwargs):
+    def __init__(self, render_mode=None, max_step = 100, **kwargs):
         """
             This is the class implementing the gymnasium protocol for the snake environment. 
             As input there are the render mode and the maximum amount of step.
@@ -39,7 +39,7 @@ class SnakeEnv(gym.Env):
         if kwargs == {}:
             self.reward_food = 10
             self.reward_death = -10
-            self.reward_step = -1
+            self.reward_step = -0.5
         else:
             self.reward_food = kwargs["reward_food"]
             self.reward_death = kwargs["reward_death"]

@@ -51,7 +51,7 @@ class SnakeEnv(gym.Env):
         
         #initial conditions are random
         self.snake = [(random.randrange(GRID_HEIGHT), random.randrange(GRID_WIDTH))]
-        self.direction = random.choice([(1, 0), (1, 0), (-1, 0), (0, -1)])
+        self.direction = random.choice([(1, 0), (0, 1), (-1, 0), (0, -1)])
         
         self._place_food()
         self.done = False
@@ -129,7 +129,7 @@ class SnakeEnv(gym.Env):
         if self.total_step > self.max_step:
             self.done = True # this should be truncated 
             truncated = True
-            reward = -2
+            reward = 0
             return self._get_obs(), reward, self.done, truncated, self.info
 
         return self._get_obs(), reward, self.done, False, self.info

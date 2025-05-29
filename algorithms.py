@@ -31,12 +31,13 @@ def argmax_over_dict_given_subkey(dictionary, sub_key, default = [0, 1, 2, 3]):
     """
         Input : dictionary, sub_key
         Output : argmax of all the elements in the dictionary sharing the sub_key   
-        This is implemented exactly with the subkey being the first two elements of the key of the dictionary, 
-        in which key are tuple of three elements. [ key = (x, y, z), subkey = (x, y)] 
+        We are assuming that the subkey must be the first part of the real key, ergo 
+        If the key is composed as follow : (*subkey, other) and so we can search for the 
+        subkey in the key just by looking at the first |subkey| components of the key.
     """
     sub_d = defaultdict(int)
     for d in dictionary:
-        if tuple((d[0], d[1])) == sub_key:
+        if tuple([d[i] for i in range (len(sub_key))]) == sub_key:
             sub_d[d] = dictionary[d]
     if sub_d == {}: # this is used if a new state is sampled (so for all the actions 0 is given as value)
         for d in default:
@@ -47,14 +48,15 @@ def argmax_over_dict_given_subkey(dictionary, sub_key, default = [0, 1, 2, 3]):
 def argmax_over_dict_given_subkey_and_possible_action(dictionary, sub_key, possible_actions = [0, 1, 2, 3], default = [0, 1, 2, 3]):
     """
         Input : dictionary, sub_key
-        Output : argmax of all the elements in the dictionary sharing the sub_key   
-        This is implemented exactly with the subkey being the first two elements of the key of the dictionary, 
-        in which key are tuple of three elements. [ key = (x, y, z), subkey = (x, y)] 
+        Output : argmax of all the elements in the dictionary sharing the sub_key  
+        We are assuming that the subkey must be the first part of the real key, ergo 
+        If the key is composed as follow : (*subkey, other) and so we can search for the 
+        subkey in the key just by looking at the first |subkey| components of the key. 
     """
     complete_subkey(dictionary, sub_key, default)
     sub_d = defaultdict(int)
     for d in dictionary:
-        if tuple((d[0], d[1])) == sub_key and d[2] in possible_actions:
+        if tuple([d[i] for i in range (len(sub_key))]) == sub_key and d[-1] in possible_actions:
             sub_d[d] = dictionary[d]
     return argmax_over_dict(sub_d)
 
@@ -76,13 +78,14 @@ def max_over_dict_given_subkey(dictionary, sub_key, default = [0, 1, 2, 3]):
     """
         Input : dictionary, sub_key
         Output : argmax of all the elements in the dictionary sharing the sub_key   
-        This is implemented exactly with the subkey being the first two elements of the key of the dictionary, 
-        in which key are tuple of three elements. [ key = (x, y, z), subkey = (x, y)] 
+        We are assuming that the subkey must be the first part of the real key, ergo 
+        If the key is composed as follow : (*subkey, other) and so we can search for the 
+        subkey in the key just by looking at the first |subkey| components of the key.
     """
     complete_subkey(dictionary, sub_key, default)
     sub_d = defaultdict(int)
     for d in dictionary:
-        if tuple((d[0], d[1])) == sub_key:
+        if tuple([d[i] for i in range (len(sub_key))]) == sub_key:
             sub_d[d] = dictionary[d]
     return max_over_dict(sub_d)
 
@@ -90,10 +93,13 @@ def max_over_dict_given_subkey(dictionary, sub_key, default = [0, 1, 2, 3]):
 def complete_subkey(dictionary, sub_key, default = [0, 1, 2, 3]):
     """
         This function is used to complete a Qstate(s, a) dictionary.
+        We are assuming that the subkey must be the first part of the real key, ergo 
+        If the key is composed as follow : (*subkey, other) and so we can search for the 
+        subkey in the key just by looking at the first |subkey| components of the key.
     """
     s = 0
     for d in dictionary:
-        if tuple((d[0], d[1])) == sub_key:
+        if tuple([d[i] for i in range (len(sub_key))]) == sub_key:
             s += 1
     if s < len(default):
         for d in default:
@@ -206,7 +212,7 @@ class RLAlgorithm:
             prob_actions = np.ones(self.action_space)/self.action_space
         else:
             prob_actions = np.zeros(self.action_space)
-            prob_actions[argmax_over_dict_given_subkey(self.Qvalues, (*s, ), default=[i for i in range (self.action_space)])[2]] = 1
+            prob_actions[argmax_over_dict_given_subkey(self.Qvalues, (*s, ), default=[i for i in range (self.action_space)])[-1]] = 1
             
         # take one action from the array of actions with the probabilities as defined above.
         a = np.random.choice(self.action_space, p=prob_actions)
@@ -215,9 +221,9 @@ class RLAlgorithm:
     def get_action_greedy(self, s, possible_action = None):
         if possible_action is None:
             complete_subkey(self.Qvalues, s, default=[i for i in range (self.action_space)])
-            a = argmax_over_dict_given_subkey(self.Qvalues, (*s, ), default=[i for i in range (self.action_space)])[2]
+            a = argmax_over_dict_given_subkey(self.Qvalues, (*s, ), default=[i for i in range (self.action_space)])[-1]
         else:
-            a = argmax_over_dict_given_subkey_and_possible_action(self.Qvalues, (*s, ), possible_action, default=[i for i in range (self.action_space)])[2]
+            a = argmax_over_dict_given_subkey_and_possible_action(self.Qvalues, (*s, ), possible_action, default=[i for i in range (self.action_space)])[-1]
         return a
 
     def save(self, path):
@@ -292,8 +298,11 @@ class RLAlgorithm:
     def __str__(self):
         s = ""
         for d in self.Qvalues:
-            s = s + f"State ({d[0]}, {d[1]}), Action {d[2]} : Value {self.Qvalues[d]}\n"
+            s = s + f"State ({tuple(d[i] for i in range (len(d) - 1))}), Action {d[-1]} : Value {self.Qvalues[d]}\n"
         return s
+
+    def name(self):
+        return "Generic RL Algorithm"
 
 
 class Montecarlo(RLAlgorithm):
@@ -355,6 +364,8 @@ class Montecarlo(RLAlgorithm):
                 print(i)
             eps = max(eps * 0.99, 0.05)  # Decay epsilon
 
+    def name(self):
+        return "Montecarlo"
     
 class SARSA(RLAlgorithm):
     
@@ -378,6 +389,9 @@ class SARSA(RLAlgorithm):
             deltaQ = r + self.gamma*self.Qvalues[(*new_s, new_a)] - self.Qvalues[(*s, a)]
             
         self.Qvalues[(*s, a)] += self.lr_v * deltaQ
+    
+    def name(self):
+        return "SARSA"
 
 class QLearning(RLAlgorithm):
 
@@ -401,6 +415,9 @@ class QLearning(RLAlgorithm):
             deltaQ = r + self.gamma*max_over_dict_given_subkey(self.Qvalues, (*new_s,), default=[i for i in range (self.action_space)]) - self.Qvalues[(*s, a)]
             
         self.Qvalues[(*s, a)] += self.lr_v * deltaQ
+    
+    def name(self):
+        return "QLearning"
 
 class DeepDoubleQLearning(RLAlgorithm):
     """
@@ -508,6 +525,9 @@ class DeepDoubleQLearning(RLAlgorithm):
 
         # Increment the iteration counter
         self.iterations += 1
+    
+    def name(self):
+        return "DDQL"
 
 
 if __name__ == "__main__":

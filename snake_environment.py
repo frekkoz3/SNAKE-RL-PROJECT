@@ -51,7 +51,7 @@ class SnakeEnv(gym.Env):
         
         #initial conditions are random
         self.snake = [(random.randrange(GRID_HEIGHT), random.randrange(GRID_WIDTH))]
-        self.direction = random.choice([(1, 0), (0, 1), (-1, 0), (0, -1)])
+        self.direction = random.choice([(1, 0), (0, 1), (-1, 0), (0, -1)]) # South, East, North, West
         
         self._place_food()
         self.done = False

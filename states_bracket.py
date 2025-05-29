@@ -67,6 +67,12 @@ class StateBracket():
         """
         pass
 
+    def to_string(self, state):
+        """
+            Input : a state
+            Output : the string format of the state following the bracketer mechanism
+        """
+        pass
 
 class FoodRelativePositionBracket(StateBracket):
     """
@@ -101,6 +107,10 @@ class FoodRelativePositionBracket(StateBracket):
     
     def __str__(self):
         return "FRP"
+    
+    def to_string(self, state):
+        dx, dy = state
+        return f"(dx : {dx}, dy : {dy})"
 
 class VonNeumann1NeighPlusFoodRelPosBracket(StateBracket):
     def bracket(self, state):
@@ -131,6 +141,10 @@ class VonNeumann1NeighPlusFoodRelPosBracket(StateBracket):
     def __str__(self):
         return "VN1+FRP"
     
+    def to_string(self, state):
+        dx, dy, s, e, n, w = state
+        return f"(dx : {dx}, dy : {dy}) Neigh : [S:{s}][E:{e}][N:{n}][W:{w}]"
+    
 class FoodDirectionBracket(StateBracket):
     """
         Specific State Bracket for the snake game.
@@ -142,7 +156,8 @@ class FoodDirectionBracket(StateBracket):
             Output : some feature of the state representing the bracket containing the state
 
             This bracketer takes as input the whole grid world. Returns as output the direction of the food wrt the head of the snake
-            so it is (s, e, n, w)
+            It look for the axis and says : 1 if the food is above the head, -1 if the food is under the head and 0 otherwise
+            (rel_y, rel_x)
         """
         grid = state 
         hx, hy, fx, fy = 0, 0, 0, 0
@@ -155,7 +170,7 @@ class FoodDirectionBracket(StateBracket):
                     fx = j
                     fy = i
 
-        return (int(hy < fy), int(hx < fx), int(hy > fy), int(hx > fx))
+        return (int(hy > fy), int(hx > fx), int(hy < fy), int(hx < fx))
 
     def get_state_dim(self):
         """
@@ -167,6 +182,10 @@ class FoodDirectionBracket(StateBracket):
     def __str__(self):
         return "FD"
 
+    def to_string(self, state):
+        ds, de, dn, dw = state
+        return f"(ds : {ds}, de : {de}, dn : {dn}, dw : {dw})"
+
 class VonNeumann1NeighPlusFoodDirectionBracket(StateBracket):
     """
         Specific State Bracket for the snake game.
@@ -177,8 +196,9 @@ class VonNeumann1NeighPlusFoodDirectionBracket(StateBracket):
             Input : generic state
             Output : some feature of the state representing the bracket containing the state
 
-            This bracketer takes as input the whole grid world. Returns as output the direction of the food wrt the head of the snake
-            so it is (s, e, n, w)
+            This bracketer takes as input the whole grid world. Returns as output the direction of the food wrt the head of the snake plus the von neumann neighborhood
+            It look for the axis and says : 1 if the food is above the head, -1 if the food is under the head and 0 otherwise
+            (rel_y, rel_x)
         """
         grid = state 
         hx, hy, fx, fy = 0, 0, 0, 0
@@ -191,22 +211,26 @@ class VonNeumann1NeighPlusFoodDirectionBracket(StateBracket):
                     fx = j
                     fy = i
 
-        return (int(hy < fy), int(hx < fx), int(hy > fy), int(hx > fx), *von_neumann_neigh_radius_1(grid, [hy, hx]))
+        return (int(hy > fy), int(hx > fx), int(hy < fy), int(hx < fx), *von_neumann_neigh_radius_1(grid, [hy, hx]))
 
     def get_state_dim(self):
         """
             Returns the dimension of the state space.
             In this case, the relative position of the food wrt the head of the snake can be represented as a 2D vector.
         """
-        return 4
+        return 8
     
     def __str__(self):
         return "VN1+FD"
+    
+    def to_string(self, state):
+        ds, de, dn, dw, s, e, n, w = state
+        return f"(ds : {ds}, de : {de}, dn : {dn}, dw : {dw}) Neigh : [S:{s}][E:{e}][N:{n}][W:{w}]"
 
 if __name__ == "__main__":
     grid = [[0, 3, 3, 3], 
             [0, 3, 3, 3],
             [0, 0, 0, 0], 
             [1, 0, 0, 2]]
-    bracketer = VonNeumann1NeighPlusFoodRelPosBracket()
+    bracketer = VonNeumann1NeighPlusFoodDirectionBracket()
     print(bracketer.bracket(grid))

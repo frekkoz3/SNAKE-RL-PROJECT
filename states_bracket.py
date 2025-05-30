@@ -170,7 +170,7 @@ class FoodDirectionBracket(StateBracket):
                     fx = j
                     fy = i
 
-        return (int(hy > fy), int(hx > fx), int(hy < fy), int(hx < fx))
+        return (int(hy < fy), int(hx < fx), int(hy > fy), int(hx > fx))
 
     def get_state_dim(self):
         """
@@ -211,7 +211,7 @@ class VonNeumann1NeighPlusFoodDirectionBracket(StateBracket):
                     fx = j
                     fy = i
 
-        return (int(hy > fy), int(hx > fx), int(hy < fy), int(hx < fx), *von_neumann_neigh_radius_1(grid, [hy, hx]))
+        return (int(hy < fy), int(hx < fx), int(hy > fy), int(hx > fx), *von_neumann_neigh_radius_1(grid, [hy, hx]))
 
     def get_state_dim(self):
         """
@@ -229,8 +229,8 @@ class VonNeumann1NeighPlusFoodDirectionBracket(StateBracket):
 
 if __name__ == "__main__":
     grid = [[0, 3, 3, 3], 
-            [0, 3, 3, 3],
+            [0, 2, 3, 3],
             [0, 0, 0, 0], 
-            [1, 0, 0, 2]]
+            [1, 0, 0, 0]]
     bracketer = VonNeumann1NeighPlusFoodDirectionBracket()
-    print(bracketer.bracket(grid))
+    print(bracketer.to_string(bracketer.bracket(grid)))

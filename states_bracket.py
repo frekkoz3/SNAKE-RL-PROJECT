@@ -139,7 +139,7 @@ class VonNeumann1NeighPlusFoodRelPosBracket(StateBracket):
         return 6 # 2 for the food rel position, 4 for the von neumann neighborhood
     
     def __str__(self):
-        return "VN1+FRP"
+        return "VN1 FRP"
     
     def to_string(self, state):
         dx, dy, s, e, n, w = state
@@ -221,7 +221,7 @@ class VonNeumann1NeighPlusFoodDirectionBracket(StateBracket):
         return 8
     
     def __str__(self):
-        return "VN1+FD"
+        return "VN1 FD"
     
     def to_string(self, state):
         ds, de, dn, dw, s, e, n, w = state

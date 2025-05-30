@@ -47,6 +47,9 @@ class SnakeEnv(gym.Env):
         
 
     def reset(self, seed=None, options=None):
+        """
+            This function reset the environment.
+        """
         super().reset(seed=seed)
         
         #initial conditions are random
@@ -61,12 +64,19 @@ class SnakeEnv(gym.Env):
         return self._get_obs(), self.info
 
     def _place_food(self):
+        """
+            This function place a random food on the grid in a position not in the snake body.
+        """
         while True:
             self.food = (random.randint(0, GRID_WIDTH - 1), random.randint(0, GRID_HEIGHT - 1))
             if self.food not in self.snake:
                 break
 
     def _get_obs(self):
+        """
+            Return the entire state as a grid of 0, 1, 2 and 3.
+            0 for void space, 1 for food, 2 for the head of the snake and 3 for the body of the snake.
+        """
         grid = np.zeros((GRID_HEIGHT, GRID_WIDTH), dtype=np.uint8)
         for x, y in self.snake:
             grid[y, x] = 3 # 3 for the body of the snake
@@ -87,6 +97,11 @@ class SnakeEnv(gym.Env):
         return possible_actions
 
     def step(self, action):
+        """
+            Taking an action perform that action and update the environment. 
+            If a non feasible action is passed it will be fixed in order to work.
+            This behavior is signaled as output.
+        """
         self.info = {}
         if self.done:
             return self._get_obs(), 0.0, True, False, self.info
@@ -135,6 +150,9 @@ class SnakeEnv(gym.Env):
         return self._get_obs(), reward, self.done, False, self.info
 
     def render(self):
+        """
+            This is a render mode that use Pygame.
+        """
         if self.render_mode != "human":
             return True
         
@@ -167,6 +185,9 @@ class SnakeEnv(gym.Env):
         return True
 
     def close(self):
+        """
+            This is needed to close the render.
+        """
         if self.window:
             pygame.quit()
             self.window = None

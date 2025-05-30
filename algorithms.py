@@ -11,32 +11,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from utils import *
-
-class Epsilon:
-    def __init__(self, eps, decay_mode = "costant", **kwargs):
-        """
-            Possible decaying mode : 
-            - costant (fixing an epsilon over time)
-            - linear (the parameters "coef" and "minimum" are needed while calling this) eps = max(coef*eps, minimum)
-        """
-        self.first_eps = eps
-        self.eps = eps
-        self.decay_mode = decay_mode
-        self.kwargs = kwargs
     
-    def decay(self): # We could possibly use a kwargs as argument if needed for some decay method
-        if self.decay_mode == "costant":
-            self.eps = self.eps
-            return self.eps
-        if self.decay_mode == "linear":
-            self.eps = max(self.kwargs["coef"]*self.eps, self.kwargs["minimum"])
-            return self.eps
-    
-    def reset(self):
-        self.eps = self.first_eps
-        
-    def __str__(self):
-        return f"{self.decay_mode} : {self.first_eps}"
 class DQN(nn.Module):
     """
     Deep Q_network for approximating Q-values.

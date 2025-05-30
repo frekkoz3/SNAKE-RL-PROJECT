@@ -160,7 +160,7 @@ class RLAlgorithm:
                 keep = env.render()
 
             if i % 500 == 0:
-                print(i)
+                print(f"iteration {i} : epsilon {eps}")
 
         env.close()
 

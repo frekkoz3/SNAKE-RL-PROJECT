@@ -1,4 +1,7 @@
 # TO DO LIST
+
+THERE IS A BIG PROBLEM WITH THE MODEL'S NAMES. I WILL FIX THIS SOMEHOW
+
 General:
 1. To clean up the main
 2. To implement epsilon class, gamma class, eligibility trace and so on

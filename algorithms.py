@@ -163,8 +163,9 @@ class RLAlgorithm:
 
                 keep = env.render()
 
-            clear_output(wait=False)
-            print(f"Iteration {i} : epsilon {eps}")
+            if i%500 == 0:
+                clear_output(wait=False)
+                print(f"Iteration {i} : epsilon {eps}")
 
 
         print("\n\nLearning finished\n\n")

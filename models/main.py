@@ -2,6 +2,7 @@
 
 import os
 from algorithms import *
+from main import returns
 from snake_environment import *
 from states_bracket import *
 from epsilon_scheduler import *
@@ -113,6 +114,49 @@ def train():
     return 0
 
 def play():
+    """
+    This method is used to just play with a given model.
+    """
+    model_path = input("Enter the path to the model you want to play with: ").strip()
+    if not os.path.exists(model_path):
+        print(f"Model path {model_path} does not exist. Please check the path and try again.")
+        return
+
+    model_name = input("Enter the model name (DDQN, QLearning, SARSA, MC): ").strip().upper()
+    if model_name not in ['DDQN', 'QLearning', 'SARSA', 'MC']:
+        print(f"Invalid model name {model_name}. Supported models are: DDQN, QLearning, SARSA, MC.")
+        return
+
+    bracketer = VonNeumann1NeighPlusFoodDirectionBracket()  # Example bracket, can be changed
+    env = SnakeEnv(render_mode='human')
+
+    try:
+        if model_name == 'DDQN':
+            state_dim = bracketer.get_state_dim()
+            model = DeepDoubleQLearning(action_space=env.action_space, state_dim=state_dim)
+        elif model_name == 'QLearning':
+            model = QLearning(action_space=env.action_space)
+        elif model_name == 'SARSA':
+            model = SARSA(action_space=env.action_space)
+        elif model_name == 'MC':
+            model = Montecarlo(action_space=env.action_space)
+
+        model.upload(model_path)
+    except Exception as e:
+        print(f"Error loading the model: {e}")
+        return
+
+    print("Starting the game. Press Ctrl+C to exit.")
+    model.play(env=env, bracketer=bracketer)
+
+    print(f'Would you like to play again with the same model? (Y/N)')
+    play_again = input().strip().upper()
+    if play_again == 'Y':
+        play()
+    else:
+        print("Exiting the game. Thank you for playing!")
+        return
+
 
 
 def main():

@@ -2,6 +2,12 @@ import numpy as np
 import scipy
 from collections import defaultdict
 
+import algorithms as alg
+from snake_environment import SnakeEnv
+
+from IPython.display import clear_output
+
+
 def action_name(index):
     dict = {0 : "south", 1 : "east", 2 : "north", 3 : "west"}
     return dict[index]
@@ -122,3 +128,58 @@ def discount_cumsum(x, discount):
          x2]
     """
     return scipy.signal.lfilter([1], [1, float(-discount)], x[::-1], axis=0)[::-1]
+
+
+def get_model_average_score(model_name, action_space, gamma, lr_v, model_path, bracketer, num_episodes=100, render_mode='nonhuman', **kwargs):
+    """
+    Computes the average score of a model over a number of episodes.
+    """
+
+    assert num_episodes > 0, "Number of episodes must be greater than 0."
+    model_types = ['DDQN', 'QLearning', 'SARSA', 'MC']
+    env = SnakeEnv(render_mode=render_mode)
+
+    if model_name not in model_types:
+        print(f'Model {model_name} is not supported. Supported models are: {model_types}.\nReturning...')
+        return None
+
+    if model_name == 'DDQN':
+        if len(kwargs) < 5:
+            print('Not enough parameters for Deep Double Q-Learning. Returning...')
+            return None
+
+        state_dim = kwargs['state_dim']
+        batch_size = kwargs['batch_size']
+        memory_size = kwargs['memory_size']
+        target_update_freq = kwargs['target_update_freq']
+        device = kwargs['device']
+
+        model = alg.DeepDoubleQLearning(action_space=action_space, state_dim=state_dim, gamma=gamma, lr_v=lr_v, batch_size=batch_size,
+                                        memory_size=memory_size, target_update_freq=target_update_freq, device=device)
+
+    elif model_name  == 'QLearning':
+        model = alg.QLearning(action_space=action_space, gamma=gamma, lr_v=lr_v)
+
+    elif model_name == 'SARSA':
+        model = alg.SARSA(action_space=action_space, gamma=gamma, lr_v=lr_v)
+
+    elif model_name == 'MC':
+        model = alg.Montecarlo(action_space=action_space, gamma=gamma, lr_v=lr_v)
+
+    try:
+        model.upload(model_path)
+    except Exception:
+        print(f'Error uploading model {model_name}. Returning...')
+        return None
+
+    total_rewards = 0
+
+    for episode in range(num_episodes):
+        clear_output(wait=False)
+        print(f'Episode {episode + 1}/{num_episodes}')
+        total_rewards += model.play(env=env, bracketer=bracketer)
+
+    return total_rewards / num_episodes
+
+
+

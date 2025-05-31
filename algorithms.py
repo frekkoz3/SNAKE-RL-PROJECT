@@ -6,6 +6,7 @@
 import numpy as np
 from collections import defaultdict, deque
 import pickle
+from IPython.display import clear_output
 
 import torch
 import torch.nn as nn
@@ -162,8 +163,8 @@ class RLAlgorithm:
 
                 keep = env.render()
 
-            if i % 500 == 0:
-                print(f"iteration {i} : epsilon {eps}")
+            clear_output(wait=False)
+            print(f"Iteration {i} : epsilon {eps}")
 
 
         print("\n\nLearning finished\n\n")
@@ -175,11 +176,13 @@ class RLAlgorithm:
     def play(self, env, bracketer):
         done = False
         keep = True
+        total_reward = 0
 
         state, _ = env.reset()
         state = bracketer.bracket(state)
 
         action = None
+
 
         while not done and keep:
             possible_actions = env.get_possible_actions(action)
@@ -188,7 +191,12 @@ class RLAlgorithm:
             state = bracketer.bracket(state)
             keep = env.render()
 
+            total_reward += reward
+
         env.close()
+
+        return total_reward
+
 
     def print_q_values(self, bracketer):
         s = ""
@@ -205,8 +213,8 @@ class RLAlgorithm:
 
 class Montecarlo(RLAlgorithm):
     
-    def __init__(self, env, gamma, lr_v):
-        super().__init__(env)
+    def __init__(self, action_space, gamma, lr_v):
+        super().__init__(action_space)
         self.gamma = gamma
         self.lr_v = lr_v
         self.returns = defaultdict(list)  # To store returns for each state-action pair
@@ -261,8 +269,8 @@ class Montecarlo(RLAlgorithm):
                 # Update the Q-value for the state-action pair
                 self.Qvalues[(*state, action)] = np.mean(self.returns[(*state, action)])
 
-            if i % 500 == 0:
-                print(i)
+            clear_output()
+            print(i)
 
     def name(self):
         return "Montecarlo"

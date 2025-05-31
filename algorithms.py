@@ -20,13 +20,40 @@ class DQN(nn.Module):
     def __init__(self, state_dim, action_dim):
         super(DQN, self).__init__()
         self.fc = nn.Sequential(
-            nn.Linear(state_dim, 128),
+            nn.Linear(state_dim, 32),
             nn.ReLU(),
-            nn.Linear(128, action_dim),
+            nn.Linear(32, 32),
+            nn.ReLU(),
+            nn.Linear(32, action_dim),
         )
 
     def forward(self, state):
         return self.fc(state)
+
+
+class ConvolutionalDQN(nn.Module):
+
+    def __init__(self, state_dim, action_dim):
+        super(ConvolutionalDQN, self).__init__()
+
+        self.layers = nn.Sequential(
+            nn.Conv2d(state_dim, 32, kernel_size=4, stride=2, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(32, 128, kernel_size=4, stride=2, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(128, 16, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(),
+            nn.Linear(16 * (state_dim // 4) * (state_dim // 4), action_dim),
+        )
+
+    def forward(self, x):
+        """
+        Forward pass through the network.
+        x is expected to be of shape (batch_size, state_dim, height, width)
+        """
+        x = x.permute(0, 3, 1, 2)
+        x = self.layers(x)
+        return x.view(x.size(0), -1)  # Flatten the output to (batch_size, action_dim)
 
 
 class ReplayBuffer:
@@ -124,8 +151,9 @@ class RLAlgorithm:
                 
                 # Keeps track of performance for each episode
                 performance_traj[i] += reward
-                
-                new_a = self.get_action_epsilon_greedy(new_s, eps)
+
+                possible_actions = env.get_possible_actions(action)
+                new_a = self.get_action_epsilon_greedy(new_s, eps, possible_actions=possible_actions)
 
                 self.single_step_update(state, action, reward, new_s, new_a, done)
                 
@@ -137,6 +165,11 @@ class RLAlgorithm:
             if i % 500 == 0:
                 print(f"iteration {i} : epsilon {eps}")
 
+
+        print("\n\nLearning finished\n\n")
+        for i in range(len(performance_traj)):
+            if i % 100 == 0:
+                print(f"Episode {i} : Performance {performance_traj[i]}")
         env.close()
 
     def play(self, env, bracketer):
@@ -146,14 +179,11 @@ class RLAlgorithm:
         state, _ = env.reset()
         state = bracketer.bracket(state)
 
-        possible_action = [0, 1, 2, 3]
-        last_action = None
+        action = None
 
         while not done and keep:
-            if last_action is not None:
-                possible_action = [0, 1, 2, 3]
-                possible_action.remove(opposite_action(last_action))
-            action = self.get_action_greedy(state, possible_action)
+            possible_actions = env.get_possible_actions(action)
+            action = self.get_action_greedy(state, possible_actions)
             state, reward, done, trunc, inf = env.step(action)
             state = bracketer.bracket(state)
             keep = env.render()
@@ -214,6 +244,7 @@ class Montecarlo(RLAlgorithm):
                 episode.append((state, action, reward))
 
                 possible_actions = env.get_possible_actions(action)
+
                 new_a = self.get_action_epsilon_greedy(new_s, eps, possible_actions)
 
                 state = new_s
@@ -290,11 +321,12 @@ class QLearning(RLAlgorithm):
 
 class DeepDoubleQLearning(RLAlgorithm):
     """
-    This algorithm implements Deep Double Q-learning by using a Deep Q-Network (DQN) to approximate the Q-values.
+    This algorithm implements Deep Double Q-learning by using Deep Q-Networks (DQN) to approximate the Q-values.
     """
 
     def __init__(self, action_space, gamma, lr_v, state_dim, batch_size=32, memory_size=10000, target_update_freq=1000, device='cpu'):
         super().__init__(action_space)
+
         self.batch_size = batch_size
         self.memory_size = memory_size
         self.target_update_freq = target_update_freq
@@ -313,31 +345,29 @@ class DeepDoubleQLearning(RLAlgorithm):
         self.dqn_target.load_state_dict(self.dqn_online.state_dict())
         self.dqn_target.eval()
 
+
     def get_action_epsilon_greedy(self, state, eps, possible_actions=None):
-        if np.random.rand() < eps:
-            if possible_actions is None or len(possible_actions) == 0:
-                # Fallback if no possible actions are specified (should ideally not happen in constrained envs)
-                # Or if the environment truly allows all actions from self.action_space
-                return np.random.choice(self.action_space) # Assumes self.action_space is an int for range, or a list
+        if np.random.rand() < eps: # Explore
+            if possible_actions is None:
+                possible_actions = list(range(self.action_space))
             return np.random.choice(possible_actions)
         else: # Exploit
+            if possible_actions is None:
+                possible_actions = list(range(self.action_space))
             s_tensor = torch.tensor(state, dtype=torch.float32, device=self.device).unsqueeze(0)
             with torch.no_grad():
-                q_values_all = self.dqn_online(s_tensor)[0]  # Q-values for state s, shape [action_dim] 
+                q_values_all = self.dqn_online(s_tensor)[0]
                 # this s is in the format (state, action) ? frekko
 
-            if possible_actions is None or len(possible_actions) == 0:
-                return q_values_all.argmax().item()
-            else:
                 # Select best action from the subset of possible_actions
                 q_values_subset = q_values_all[possible_actions]
                 best_action_idx_in_subset = q_values_subset.argmax().item()
+
                 return possible_actions[best_action_idx_in_subset]
 
 
     def get_action_greedy(self, state, possible_actions=None):
-        # Se vuoi rispettare possibili vincoli:
-        qvals = self.dqn_online(torch.tensor(state, dtype=torch.float32, device=self.device).unsqueeze(0))
+        qvals = self.dqn_target(torch.tensor(state, dtype=torch.float32, device=self.device).unsqueeze(0))
         best = qvals.argmax(dim=1).item()
         if possible_actions is None or best in possible_actions:
             return best
@@ -356,7 +386,7 @@ class DeepDoubleQLearning(RLAlgorithm):
         """
         self.memory.append((s, a, r, new_s, done))
 
-        if len(self.memory) < self.batch_size:
+        if len(self.memory) < 2*self.batch_size:
             return
 
         states, actions, rewards, next_states, dones = self.memory.sample()
@@ -370,15 +400,17 @@ class DeepDoubleQLearning(RLAlgorithm):
         # Compute Q-values for the current states using the ONLINE DQN
         current_q_values = self.dqn_online(states).gather(1, actions).squeeze(1)
 
+        next_actions = self.dqn_online(next_states).argmax(1, keepdim=True)
+
+
         # Compute Q-values for the next states using the TARGET DQN
         with torch.no_grad():
             # Get the best action given the next states using the ONLINE DQN
-            next_actions = self.dqn_online(next_states).argmax(1, keepdim=True)
             # Compute the Q-values for the next states using the TARGET DQN
             next_q_values = self.dqn_target(next_states).gather(1, next_actions).squeeze(1)
 
             # Compute the expected q_values
-            target_q_values = rewards + self.gamma * next_q_values * (1-dones) 
+            target_q_values = rewards + self.gamma * next_q_values * (1 - dones)
             
         # Compute the loss
         loss = F.mse_loss(current_q_values, target_q_values)
@@ -394,9 +426,18 @@ class DeepDoubleQLearning(RLAlgorithm):
 
         # Increment the iteration counter
         self.iterations += 1
+
     
     def name(self):
         return "DDQL"
+
+    def save(self, path):
+        super().save(path)
+        torch.save(self.dqn_target.state_dict(), path)
+
+    def upload(self, path):
+        self.dqn_target.load_state_dict(torch.load(path))
+        self.dqn_target.eval()
 
 
 if __name__ == "__main__":

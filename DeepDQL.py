@@ -179,6 +179,10 @@ class DeepDQL:
                 if returns[n] >= best_return:
                     best_return = returns[n]
                     torch.save(self.Q.state_dict(), "best_model.pth")
+
+            if n % 100 == 0:
+                print(f"Trajectory {n}, return = {returns[n]}, epsilon = {epsilon}, best return = {best_return}")
+
         end = time.time()
 
         print("Time span = ", end-start)
@@ -242,7 +246,7 @@ if __name__ == "__main__":
 
     deepDQL = DeepDQL(env, NN)
 
-    returns = deepDQL.learnQ(n_traj = 700, n_traj_for_Qtarget_update=30, batch_size=150)
+    returns = deepDQL.learnQ(n_traj = 5000, n_traj_for_Qtarget_update=200, batch_size=128)
     deepDQL.evaluation_averaged()
     plt.plot(returns)
     plt.show()

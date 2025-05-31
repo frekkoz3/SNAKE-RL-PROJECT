@@ -8,6 +8,7 @@ General:
 2. To implement epsilon class, gamma class, eligibility trace and so on
 3. To improve the DQL
 4. To implement the Policy Gradient
+5. To finish `main.py`
 
 ---
 

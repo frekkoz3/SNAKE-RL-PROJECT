@@ -163,9 +163,8 @@ class RLAlgorithm:
 
                 keep = env.render()
 
-            if i%500 == 0:
-                clear_output(wait=False)
-                print(f"Iteration {i} : epsilon {eps}")
+            clear_output(wait=False)
+            print(f"Episode {i} : epsilon {eps}")
 
 
         print("\n\nLearning finished\n\n")
@@ -271,7 +270,12 @@ class Montecarlo(RLAlgorithm):
                 self.Qvalues[(*state, action)] = np.mean(self.returns[(*state, action)])
 
             clear_output()
-            print(i)
+            print(f'Episode {i}/{n_episodes}')
+
+        print("\n\nLearning finished\n\n")
+        for i in range(len(performance_traj)):
+            if i % 100 == 0:
+                print(f"Episode {i}/{n_episodes} : Performance {performance_traj[i]}")
 
     def name(self):
         return "Montecarlo"

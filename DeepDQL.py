@@ -8,20 +8,27 @@ import numpy as np
 import matplotlib.pyplot as plt
 import time
 
-
-class NN(nn.Module):
-    def __init__(self, state_dim, n_actions):
-        super(NN, self).__init__()
-
-        self.fc1 = nn.Linear(state_dim, 16)
-        self.fc2 = nn.Linear(16, 16)
-        self.out = nn.Linear(16, n_actions)
-    def forward(self, x):
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
-        return self.out(x) 
-
 class DeepDQL:
+    """
+    For initialization it requires ONLY:
+        an INSTANCE of an enviroment(that follows gymnasium conventions)
+        a neural network CLASS, with __init__(self, state_dim, n_actions).
+    During the initialization state_dim and n_actions are obtained from the enviroment, and 2 nets(mainQ and targetQ) are created from the class NN
+    Functions:
+        learnQ: trains the network, and the Q associated with the best performance is stored in best_model.pth. 
+                It returns a vector containing the sum of the rewards for each trajectory
+                Argoments:
+                    batch_size: number of states that the networks process simultaneously (a batch extracted from replay buffer)
+                    n_traj_for_Qtarget_update: Q_target is set equal to Q every n trajectories
+                    t_step_for_backpropagation: we train Q every t steps, not every step
+                    buffer_capacity: max capacity of the buffer used to extract random batch
+                    max_steps: after this number of STEPS(!= traj) the training is cut short (so we break out of infinite loops)
+        
+        evaluation_averaged: gives an average of the sum of rewards of 20 trajectory WITH THE GREEDY POLICY
+
+        human_evaluations(n): shows visually the greedy policy at work in n trajectories(using render in human mode)
+
+    """
     class ReplayBuffer:     
         #replay buffer: we store ALL history(up to capacity), then every time we update the weights, we take a random sample of batch_size element
         #this gives uncorrelation, and makes it possible to reuse experience for learining many times. 
@@ -50,9 +57,7 @@ class DeepDQL:
     def __init__(self,
                   env, 
                   NN, 
-                  gamma = 0.99, 
-                  epsilon_start = 1, epsilon_end = 0.01, epsilon_decay = 0.995,
-                  learining_rate_optimizer = 0.001):     #e = max(e_end, e_start * e_decay^n)  where n is the trajectory's number
+                  gamma = 0.99):     
         
         self.env = env
         self.state_dim, self.n_actions = self.get_env_specs(env) 
@@ -61,17 +66,12 @@ class DeepDQL:
         self.device = torch.device("cuda" if torch.cuda.is_available()  else "cpu")      #if there is a GPU available, we use it
 
         self.gamma = gamma
-        self.epsilon_start = epsilon_start
-        self.epsilon_end = epsilon_end
-        self.epsilon_decay = epsilon_decay
-
+    
         #we initialized two neural network, for the main Q (which will be updated via TD learning) and Qtarget (which copies Q every 10 steps)
         self.Q = self.NN(self.state_dim, self.n_actions).to(self.device)
         self.Qtarget = self.NN(self.state_dim, self.n_actions).to(self.device)
         self.Qtarget.load_state_dict(self.Q.state_dict())
 
-        self.optimizer = torch.optim.Adam(self.Q.parameters(), lr=learining_rate_optimizer)    #Adam is more efficient than SGD
-        self.criterion = nn.MSELoss()    #loss = squared error
 
     def get_env_specs(self, env):       
         # Action space
@@ -93,11 +93,6 @@ class DeepDQL:
 
         return state_dim, n_actions
 
-    def set_optimizer(self, optimizer):
-        self.optimizer = optimizer
-    def set_criterion(self, criterion):
-        self.criterion = criterion
-
     def choose_action(self, state, epsilon):
         with torch.no_grad():   #when we do backward propagation, we do again forward, so now we don't need grad
             q = self.Q(state)       #q[a] = Q(state, a) 
@@ -106,36 +101,48 @@ class DeepDQL:
             else:
                 return int(torch.argmax(q).item())
 
-    def learnQ(self, n_traj = 500, batch_size = 100, n_traj_for_Qtarget_update = 20, buffer_capacity = 3000, t_step_for_backpropagation = 5):
+    def learnQ(self, n_traj = 500, batch_size = 100, 
+               n_traj_for_Qtarget_update = 20, t_step_for_backpropagation = 5, 
+               buffer_capacity = 3000, max_steps = 500000,
+               epsilon_start = 1, epsilon_end = 0.01,    #we update epsilon so it decays exponentially reaching espilon_end for n = 2/3 * n_traj
+               learining_rate_optimizer = 0.001):
+        
         start = time.time()
+
+        self.optimizer = torch.optim.Adam(self.Q.parameters(), lr=learining_rate_optimizer)    #Adam is more efficient than SGD
+        self.criterion = nn.MSELoss()    #loss = squared error
 
         buffer = self.ReplayBuffer(capacity=buffer_capacity, device=self.device)     #replay buffer, which creates tensor in device
 
-
-
-
         returns = np.zeros(n_traj)     #we store the performance for every trajectory
-        best_return = 0
+        best_return = 0                #we save the Q value when we got the best score
 
         t = 0
         
         for n in range(n_traj):
-            
-            #tau = 0.005  # soft update rate
-            #with torch.no_grad():
-            #    for target_param, param in zip(self.Qtarget.parameters(), self.Q.parameters()):
-            #        target_param.data.copy_(tau * param.data + (1 - tau) * target_param.data)
+            #instead of udating rarely the target network, we smoothly change it
+            """
+            tau = 0.005  # soft update rate
+            with torch.no_grad():
+                for target_param, param in zip(self.Qtarget.parameters(), self.Q.parameters()):
+                    target_param.data.copy_(tau * param.data + (1 - tau) * target_param.data)
+            """
             if n%n_traj_for_Qtarget_update == 0:       #every one in a while we update the target network, making it equal to the main one
                 self.Qtarget.load_state_dict(self.Q.state_dict())
 
-            state, _ = self.env.reset()    #initial state                                            
-            state = torch.tensor(state, dtype=torch.float32, device=self.device).flatten()   #we need a tensor because otherwise ReplayBuffer.sample() doesn't work
-                                                                                        #.flatten() because we need a 1 dim vector for the neural network
+            if t > max_steps:       #if the comulative number of steps is too high(e.g. we got stuck), we cut the training short
+                break 
 
-            epsilon = max(self.epsilon_end, self.epsilon_start*(self.epsilon_decay**n))     #we update epsilon
+            state, _ = self.env.reset()    #initial state                                            
+            state = torch.tensor(state, dtype=torch.float32, device=self.device).flatten()  #we need a tensor because otherwise ReplayBuffer.sample() doesn't work
+                                                                                            #.flatten() because we need a 1 dim vector for the neural network
+            
+            
+            #epsilon = max(epsilon_end, epsilon_start*(epsilon_decay)**(n))             #version where epsilon_decay is fixed
+            epsilon = max(epsilon_end, epsilon_start*(epsilon_end/epsilon_start)**(3.0*n/(2.0*n_traj)))    #we update epsilon so it decays explnentially reaching espilon_end for n = 2/3 * n_traj
 
             done = False
-            while not done:
+            while (not done) and (t <= max_steps):
 
                 action = self.choose_action(state, epsilon)    #we take an epsilon greedy action
 
@@ -152,7 +159,7 @@ class DeepDQL:
                 buffer.push(state, action, reward, next_state, done)
 
                 #updating the weights using a whole batch of batch_size elements extracting randomly from memory by sample()
-                if (len(buffer) > 2*batch_size) and (t%t_step_for_backpropagation == 0):
+                if (len(buffer) > batch_size) and (t%t_step_for_backpropagation == 0):
                     
                     states, actions, rewards, next_states, dones = buffer.sample(batch_size)
                     
@@ -162,7 +169,7 @@ class DeepDQL:
 
                     with torch.no_grad():                   #we MUST NOT update the weights of the target network, so we must not keep track of the gradient
                         q_next = self.Qtarget(next_states).gather(1, next_actions.unsqueeze(1)).squeeze(1)     #for every next state, we have to take the value of the optimal action
-                        q_next = torch.clamp(q_next, 0, 500)        #avoids degenerate value of Q
+                        
                         targets = rewards + self.gamma*q_next*(~dones)                 #if done = True we have   r + gamma*Q(s', a)*0 = r  (no future rewards)   
                     
                     predictions = self.Q(states).gather(1, actions.unsqueeze(1)).squeeze(1)     #for every state, we have to take value of the action we actually took
@@ -179,10 +186,6 @@ class DeepDQL:
                 if returns[n] >= best_return:
                     best_return = returns[n]
                     torch.save(self.Q.state_dict(), "best_model.pth")
-
-            if n % 100 == 0:
-                print(f"Trajectory {n}, return = {returns[n]}, epsilon = {epsilon}, best return = {best_return}")
-
         end = time.time()
 
         print("Time span = ", end-start)
@@ -204,7 +207,7 @@ class DeepDQL:
                 ret = 0
                 while not done:
                     q = self.Q(state)       #q[a] = Q(state, a)
-                    action = int(torch.argmax(q).item())
+                    action = int(torch.argmax(q).item())        #we use greedy policy
                 
                     next_state, reward, term, trunc, _ = self.env.step(action)
 
@@ -218,35 +221,28 @@ class DeepDQL:
                 
             print(f"average return with greedy policy= {ret}")
 
-    def single_evaluation(self):
-        self.env.render_mode = "human"
+    def human_evaluations(self, n):
 
-        self.Q.load_state_dict(torch.load("best_model.pth"))
+        for _ in range(n):
+            self.env.render_mode = "human"
+
+            self.Q.load_state_dict(torch.load("best_model.pth"))
+                
+            state, _ = self.env.reset()
+            state = torch.tensor(state, dtype=torch.float32, device=self.device).flatten()
             
-        state, _ = self.env.reset()
-        state = torch.tensor(state, dtype=torch.float32, device=self.device).flatten()
-        
-        done = False
-        
-        while not done:
-            q = self.Q(state)       #q[a] = Q(state, a)
-            action = int(torch.argmax(q).item())
-        
-            next_state, reward, term, trunc, _ = self.env.step(action)
+            done = False
+            
+            while not done:
+                q = self.Q(state)       #q[a] = Q(state, a)
+                action = int(torch.argmax(q).item())
+            
+                next_state, reward, term, trunc, _ = self.env.step(action)
 
-            next_state = torch.tensor(next_state, dtype=torch.float32, device=self.device).flatten()
+                next_state = torch.tensor(next_state, dtype=torch.float32, device=self.device).flatten()
 
-            done = term or trunc
+                done = term or trunc
 
-            self.env.render()
-            state = next_state
+                self.env.render()
+                state = next_state
 
-if __name__ == "__main__":
-    env = gym.make("CartPole-v1")
-
-    deepDQL = DeepDQL(env, NN)
-
-    returns = deepDQL.learnQ(n_traj = 5000, n_traj_for_Qtarget_update=200, batch_size=128)
-    deepDQL.evaluation_averaged()
-    plt.plot(returns)
-    plt.show()

@@ -37,7 +37,7 @@ class DeepDQL:
             self.buffer = deque(maxlen=capacity)    #deque is a FIFO
             self.device = device
 
-        def push(self, state, action, reward, next_state, done):
+        def append(self, state, action, reward, next_state, done):
             self.buffer.append((state, action, reward, next_state, done))   #we append tuples, done is necessary to now if to add future rewards in the estimation of Q
 
         def sample(self, batch_size):
@@ -156,7 +156,7 @@ class DeepDQL:
                 done = term or trunc
 
                 #saving data
-                buffer.push(state, action, reward, next_state, done)
+                buffer.append(state, action, reward, next_state, done)
 
                 #updating the weights using a whole batch of batch_size elements extracting randomly from memory by sample()
                 if (len(buffer) > batch_size) and (t%t_step_for_backpropagation == 0):

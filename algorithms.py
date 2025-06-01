@@ -35,17 +35,19 @@ class DQN(nn.Module):
 
 class ConvolutionalDQN(nn.Module):
 
-    def __init__(self, state_dim, action_dim):
+    def __init__(self, action_dim, n_layers, height, width):
         super(ConvolutionalDQN, self).__init__()
 
         self.layers = nn.Sequential(
-            nn.Conv2d(state_dim, 32, kernel_size=4, stride=2, padding=1),
+            nn.Conv2d(in_channels=n_layers, 32, kernel_size=4, stride=2),
             nn.ReLU(),
-            nn.Conv2d(32, 128, kernel_size=4, stride=2, padding=1),
+            nn.Conv2d(32, 64, kernel_size=4, stride=2),
             nn.ReLU(),
-            nn.Conv2d(128, 16, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(64, 32, kernel_size=3, stride=1),
             nn.ReLU(),
-            nn.Linear(16 * (state_dim // 4) * (state_dim // 4), action_dim),
+            nn.Flatten(),
+            nn.Linear(32 * ((height - 3) // 2) * ((width - 3) // 2), 32),
+            nn.Linear(32, action_dim)
         )
 
     def forward(self, x):
@@ -53,9 +55,8 @@ class ConvolutionalDQN(nn.Module):
         Forward pass through the network.
         x is expected to be of shape (batch_size, state_dim, height, width)
         """
-        x = x.permute(0, 3, 1, 2)
         x = self.layers(x)
-        return x.view(x.size(0), -1)  # Flatten the output to (batch_size, action_dim)
+        return x
 
 
 class ReplayBuffer:
@@ -365,6 +366,8 @@ class QLearning(RLAlgorithm):
     def name(self):
         return "QLearning"
 
+
+
 class DeepDoubleQLearning(RLAlgorithm):
     """
     This algorithm implements Deep Double Q-learning by using Deep Q-Networks (DQN) to approximate the Q-values.
@@ -422,7 +425,6 @@ class DeepDoubleQLearning(RLAlgorithm):
         return possible_actions[sub_q.argmax().item()]
 
 
-
     def single_step_update(self, s, a, r, new_s, new_a, done):
         """
         This method is a bit more technical.
@@ -477,13 +479,99 @@ class DeepDoubleQLearning(RLAlgorithm):
     def name(self):
         return "DDQL"
 
+
     def save(self, path):
         super().save(path)
         torch.save(self.dqn_target.state_dict(), path)
 
+
     def upload(self, path):
         self.dqn_target.load_state_dict(torch.load(path))
         self.dqn_target.eval()
+
+
+class AtariDQN(DeepDoubleQLearning):
+    """
+    This class implements the DDQL using an Atari-like structure
+    It uses convolutional layers to process the input state.
+    """
+
+    def __init__(self, action_space, gamma, lr_v, n_layers, height, width, batch_size=32, memory_size=10000, target_update_freq=1000, device='cpu'):
+        super().__init__(action_space, gamma, lr_v, n_layers*height*width, batch_size, memory_size, target_update_freq, device)
+
+        self.n_layers = n_layers
+        self.recent_history = deque(maxlen=n_layers)
+
+        self.dqn_online = ConvolutionalDQN(action_dim=action_space, n_layers=n_layers, height=height, width=width).to(self.device)
+        self.dqn_target = ConvolutionalDQN(action_dim=action_space, n_layers=n_layers, height=height, width=width).to(self.device)
+        self.dqn_target.load_state_dict(self.dqn_online.state_dict())
+        self.dqn_target.eval()
+
+        self.optimizer = torch.optim.Adam(self.dqn_online.parameters(), lr=self.lr_v)
+
+
+    def single_step_update(self, s, a, r, new_s, new_a, done):
+        """
+        TODO: è DA SISTEMARE UN PO' QUESTO METODO.
+        """
+
+        # Update the recent history
+        self.recent_history.append((s, a, r, new_s, done))
+
+        # if the recent history is full, add to the memory
+        if len(self.recent_history) == self.n_layers:
+            # Convert the recent history to a state
+            state = np.array([self.recent_history[i][0] for i in range(self.n_layers)])
+            action = self.recent_history[-1][1]
+            reward = self.recent_history[-1][2]
+            new_state = np.array([self.recent_history[i][3] for i in range(self.n_layers)])
+            done = self.recent_history[-1][4]
+
+            # Store the transition in memory
+            self.memory.append((state, action, reward, new_state, done))
+
+        if len(self.memory) < 2*self.batch_size:
+            return
+
+        states, actions, rewards, next_states, dones = self.memory.sample()
+
+        states = torch.tensor(states, dtype=torch.float32, device=self.device)
+        actions = torch.tensor(actions, dtype=torch.int64, device=self.device).unsqueeze(1)
+        rewards = torch.tensor(rewards, dtype=torch.float32, device=self.device)
+        next_states = torch.tensor(next_states, dtype=torch.float32, device=self.device)
+        dones = torch.tensor(dones, dtype=torch.float32, device=self.device)
+
+        # Compute Q-values for the current states using the ONLINE DQN
+        current_q_values = self.dqn_online(states).gather(1, actions).squeeze(1)
+
+        next_actions = self.dqn_online(next_states).argmax(1, keepdim=True)
+
+
+        # Compute Q-values for the next states using the TARGET DQN
+        with torch.no_grad():
+            # Get the best action given the next states using the ONLINE DQN
+            # Compute the Q-values for the next states using the TARGET DQN
+            next_q_values = self.dqn_target(next_states).gather(1, next_actions).squeeze(1)
+
+            # Compute the expected q_values
+            target_q_values = rewards + self.gamma * next_q_values * (1 - dones)
+
+        # Compute the loss
+        loss = F.mse_loss(current_q_values, target_q_values)
+
+        # Update the online DQN
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+
+        # Update the target DQN every `self.target_update_freq` iterations
+        if self.iterations % self.target_update_freq == 0:
+            self.dqn_target.load_state_dict(self.dqn_online.state_dict())
+
+        # Increment the iteration counter
+        self.iterations += 1
+
+
 
 
 if __name__ == "__main__":

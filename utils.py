@@ -12,6 +12,7 @@ def action_name(index):
     dict = {0 : "south", 1 : "east", 2 : "north", 3 : "west"}
     return dict[index]
 
+
 def argmax_over_dict(dictionary):
     """
         Input : dictionary
@@ -94,7 +95,7 @@ def complete_subkey(dictionary, sub_key, default = [0, 1, 2, 3]):
     """
         This function is used to complete a Qstate(s, a) dictionary.
         We are assuming that the subkey must be the first part of the real key, ergo 
-        If the key is composed as follow : (*subkey, other) and so we can search for the 
+        If the key is composed as follows : (*subkey, other) and so we can search for the
         subkey in the key just by looking at the first |subkey| components of the key.
     """
     s = 0
@@ -103,7 +104,8 @@ def complete_subkey(dictionary, sub_key, default = [0, 1, 2, 3]):
             s += 1
     if s < len(default):
         for d in default:
-            dictionary[(*sub_key, d)] = dictionary[(*sub_key, d)] 
+            dictionary[(*sub_key, d)] = dictionary[(*sub_key, d)]
+
 
 
 def opposite_action(action):

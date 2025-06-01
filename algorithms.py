@@ -12,6 +12,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from utils import *
+from eligibility_traces import *
     
 class DQN(nn.Module):
     """
@@ -87,7 +88,7 @@ class RLAlgorithm:
         self.action_space = action_space
         self.iterations = 0 # This is used to count how many iteration until convergence
 
-    def single_step_update(self):
+    def single_step_update(self, s, a, r, new_s, new_a, done):
         """
             This is the function where to take one trajectory in the environment
         """
@@ -163,8 +164,9 @@ class RLAlgorithm:
 
                 keep = env.render()
 
-            clear_output(wait=False)
-            print(f"Episode {i} : epsilon {eps}")
+            if i % 100 == 0:
+                clear_output(wait=False)
+                print(f"Episode {i}/{n_episodes} : epsilon {eps}")
 
 
         print("\n\nLearning finished\n\n")
@@ -279,7 +281,8 @@ class Montecarlo(RLAlgorithm):
 
     def name(self):
         return "Montecarlo"
-    
+
+
 class SARSA(RLAlgorithm):
     
     def __init__(self, action_space, gamma=1, lr_v=0.01):
@@ -305,6 +308,36 @@ class SARSA(RLAlgorithm):
     
     def name(self):
         return "SARSA"
+
+
+class SARSALambda(RLAlgorithm):
+
+    def __init__(self, lambda_value, action_space, gamma=1, lr_v=0.01):
+        super().__init__(action_space)
+        # the discount factor
+        self.gamma = gamma
+        # the learning rate
+        self.lr_v = lr_v
+        # eligibility traces
+        self.e = Eligibility(lambda_value, gamma)
+
+    def single_step_update(self, s, a, r, new_s, new_a, done):
+        if done:
+            # SARSA(λ): δ = R - Q(s,a)
+            deltaQ = r - self.Qvalues[(*s, a)]
+        else:
+            deltaQ = r + self.gamma * self.Qvalues[(*new_s, new_a)] - self.Qvalues[(*s, a)]
+
+        # Decay the traces
+        self.e.decay()
+        # Update the trace for the current state-action pair
+        self.e.update((*s, a))
+
+        self.Qvalues[(*s, a)] += self.lr_v * deltaQ * self.e.traces[(*s, a)]
+
+    def name(self):
+        return "SARSALambda"
+
 
 class QLearning(RLAlgorithm):
 

@@ -2,6 +2,7 @@
     This work is developed for academic purpose by Bredariol Francesco, Savorgnan Enrico, Tic Ruben.
     This work is part of the final project for the 2024-2025 Reinforcement Learning course at the University of Trieste.
 """
+import numpy as np
 def out_of_border(grid, pos):
     max_y = len(grid)
     max_x = len(grid[0])
@@ -263,9 +264,9 @@ class VonNeumann2Neigh(StateBracket):
     def get_state_dim(self):
         """
             Returns the dimension of the state space.
-            In this case, the relative position of the food wrt the head of the snake can be represented as a 2D vector.
+            In this case, a 5x5 grid around the snake's head
         """
-        return 500
+        return 25
     
     def __str__(self):
         return "VN2"

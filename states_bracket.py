@@ -333,7 +333,7 @@ class VonNeumann2NeighPlusFoodDirectionBracket(StateBracket):
             Output : some feature of the state representing the bracket containing the state
 
             This bracketer takes as input the whole grid world. 
-            Returns as output the von neumann neighborhood of distance 2 as a 5x5 grid around the snake's head 
+            Returns as output the von neumann neighborhood of distance 2 as a 5x5 grid around the snake's head, plus the food direction
             (free cell = 0, block or outside = -1, food = 1) 
         """
         grid = state 
@@ -353,7 +353,7 @@ class VonNeumann2NeighPlusFoodDirectionBracket(StateBracket):
     def get_state_dim(self):
         """
             Returns the dimension of the state space.
-            In this case, a 5x5 grid around the snake's head plus for bits for food direction
+            In this case, a 5x5 grid around the snake's head plus 4 bits for food direction
         """
         return 29   #25(VN2) + 4(food direction)
     

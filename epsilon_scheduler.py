@@ -9,7 +9,7 @@ class Epsilon:
             This is just an Epsilon schedule. In fact it is the constant one
         """
 
-        assert 0 < eps < 1, "Error in Epsilon: eps must be a probability (between 0 and 1)"
+        assert 0 <= eps <= 1, "Error in Epsilon: eps must be a probability (between 0 and 1)"
         self.first_eps = eps
         self.eps = eps
     

@@ -274,6 +274,53 @@ class VonNeumann2Neigh(StateBracket):
     def to_string(self, state):
         return f"(The head in the middle. Food = 1, block = -1 Neigh :\n {np.array(state)}"
 
+class SquaredNeigh(StateBracket):
+    """
+        Specific State Bracket for the snake game.
+    """
+    def __init__(self, size):
+        super().__init__()
+        self.size = size
+
+    def bracket(self, state):
+        """
+            Input : generic state
+            Output : some feature of the state representing the bracket containing the state
+
+            This bracketer takes as input the whole grid world. 
+            Returns as output the sizexsize grid around the snake's head
+            (free cell = 0, block or outside = -1, food = 1) 
+        """
+        head_pos = np.argwhere(state == 2)[0].tolist()      
+
+        neigh = np.zeros((self.size,self.size)) - 1   #this will hold the result of binning. The initial value is -1 because only the cells inside the grid will be changed
+        
+        for (i, j) in np.ndindex(state.shape):                          #we iterate over all indices of the cells in the grid
+            neigh_index = (i - head_pos[0] + self.size//2, j - head_pos[1] + self.size//2)    #corresponding index for the output array neigh
+            
+            if all(0 <= neigh_index[k] < self.size for k in range(2)):        #this checks if we are inside the sizexsize grid
+                
+                if state[i, j] == 0:
+                    neigh[neigh_index] = 0
+                if state[i, j] == 1:
+                    neigh[neigh_index] = 1
+                elif state[i, j] == 3:
+                    neigh[neigh_index] = -1       
+
+        return tuple(tuple(map(int, row))  for row in neigh.tolist())
+
+    def get_state_dim(self):
+        """
+            Returns the dimension of the state space.
+            In this case, a sizexsize grid around the snake's head
+        """
+        return self.size**2
+    
+    def __str__(self):
+        return "squared neigh"
+    
+    def to_string(self, state):
+        return f"The head in the middle. Food = 1, block = -1 Neigh :\n {np.array(state)}"
 
 if __name__ == "__main__":
     grid = np.array(
@@ -286,6 +333,5 @@ if __name__ == "__main__":
             [0, 0, 0, 0, 0, 0, 3, 0]])
     bracketer = VonNeumann2Neigh()
     
-    dic = dict()
     bin = bracketer.bracket(grid)
     print(bracketer.to_string(bin))

@@ -363,6 +363,48 @@ class VonNeumann2NeighPlusFoodDirectionBracket(StateBracket):
     def to_string(self, state):
         return f"(ds : {state[0]}, de : {state[1]}, dn : {state[2]}, dw : {state[3]}) The head in the middle. Food = 1, block = -1  Neigh :\n {np.array(state[4:])} "
 
+class VonNeumann1NeighPlusFoodDirectionBracketPlusLengthTail(StateBracket):
+    """
+        Specific State Bracket for the snake game.
+    """
+
+    def bracket(self, state):
+        """
+            Input : generic state
+            Output : some feature of the state representing the bracket containing the state
+
+            This bracketer takes as input the whole grid world. Returns as output the direction of the food wrt the head of the snake plus the von neumann neighborhood, plus the length of the tail
+        """
+        grid = state 
+        hx, hy, fx, fy = 0, 0, 0, 0
+        length_tail = 0
+        for i, row in enumerate(grid):
+            for j, cel in enumerate(row):
+                if cel == 2: # head has value 2
+                    hx = j
+                    hy = i
+                if cel == 1: # food has value 1
+                    fx = j
+                    fy = i
+                if cel == 3:  # tail has value 3
+                    length_tail += 1
+
+        return (int(hy < fy), int(hx < fx), int(hy > fy), int(hx > fx), length_tail, *von_neumann_neigh_radius_1(grid, [hy, hx]))
+
+    def get_state_dim(self):
+        """
+            Returns the dimension of the state space.
+            In this case, the relative position of the food wrt the head of the snake can be represented as a 2D vector.
+        """
+        return 9
+    
+    def __str__(self):
+        return "VN1 FD LTail"
+    
+    def to_string(self, state):
+        ds, de, dn, dw, l, s, e, n, w = state
+        return f"(ds : {ds}, de : {de}, dn : {dn}, dw : {dw}) length tail : {l} Neigh : [S:{s}][E:{e}][N:{n}][W:{w}]"
+
 if __name__ == "__main__":
     grid = np.array(
            [[0, 0, 0, 0, 0, 3, 3, 0], 

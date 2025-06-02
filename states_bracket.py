@@ -322,6 +322,47 @@ class SquaredNeigh(StateBracket):
     def to_string(self, state):
         return f"The head in the middle. Food = 1, block = -1 Neigh :\n {np.array(state)}"
 
+class VonNeumann2NeighPlusFoodDirectionBracket(StateBracket):
+    """
+        Specific State Bracket for the snake game.
+    """
+
+    def bracket(self, state):
+        """
+            Input : generic state
+            Output : some feature of the state representing the bracket containing the state
+
+            This bracketer takes as input the whole grid world. 
+            Returns as output the von neumann neighborhood of distance 2 as a 5x5 grid around the snake's head 
+            (free cell = 0, block or outside = -1, food = 1) 
+        """
+        grid = state 
+        hx, hy, fx, fy = 0, 0, 0, 0
+        for i, row in enumerate(grid):
+            for j, cel in enumerate(row):
+                if cel == 2: # head has value 2
+                    hx = j
+                    hy = i
+                if cel == 1: # food has value 1
+                    fx = j
+                    fy = i
+        return (int(hy < fy), int(hx < fx), int(hy > fy), int(hx > fx), *von_neumann_neigh_radius_2(grid))
+         
+        
+
+    def get_state_dim(self):
+        """
+            Returns the dimension of the state space.
+            In this case, a 5x5 grid around the snake's head plus for bits for food direction
+        """
+        return 29   #25(VN2) + 4(food direction)
+    
+    def __str__(self):
+        return "VN2 with food direction"
+    
+    def to_string(self, state):
+        return f"(ds : {state[0]}, de : {state[1]}, dn : {state[2]}, dw : {state[3]}) The head in the middle. Food = 1, block = -1  Neigh :\n {np.array(state[4:])} "
+
 if __name__ == "__main__":
     grid = np.array(
            [[0, 0, 0, 0, 0, 3, 3, 0], 

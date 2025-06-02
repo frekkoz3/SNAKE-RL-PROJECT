@@ -227,10 +227,64 @@ class VonNeumann1NeighPlusFoodDirectionBracket(StateBracket):
         ds, de, dn, dw, s, e, n, w = state
         return f"(ds : {ds}, de : {de}, dn : {dn}, dw : {dw}) Neigh : [S:{s}][E:{e}][N:{n}][W:{w}]"
 
+class VonNeumann2Neigh(StateBracket):
+    """
+        Specific State Bracket for the snake game.
+    """
+
+    def bracket(self, state):
+        """
+            Input : generic state
+            Output : some feature of the state representing the bracket containing the state
+
+            This bracketer takes as input the whole grid world. 
+            Returns as output the von neumann neighborhood of distance 2 as a 5x5 grid around the snake's head 
+            (free cell = 0, block or outside = -1, food = 1) 
+        """
+        head_pos = np.argwhere(state == 2)[0].tolist()      
+
+        neigh = np.zeros((5,5)) - 1   #this will hold the result of binning. The initial value is -1 because only the cells inside the grid will be changed
+       
+        for (i, j) in np.ndindex(state.shape):                  #we iterate over all indices of the cells in the grid
+            neigh_index = (i - head_pos[0] + 2, j - head_pos[1] + 2)    #corresponding index for the output array neigh
+
+            if abs(i - head_pos[0]) + abs(j - head_pos[1]) <= 2:          #we consider only the cells at distance <= 2 from the head
+                if state[i, j] == 0:
+                    neigh[neigh_index] = 0
+                if state[i, j] == 1:
+                    neigh[neigh_index] = 1
+                elif state[i, j] == 3:
+                   neigh[neigh_index] = -1       
+
+        return tuple(tuple(map(int, row))  for row in neigh.tolist())
+         
+        
+
+    def get_state_dim(self):
+        """
+            Returns the dimension of the state space.
+            In this case, the relative position of the food wrt the head of the snake can be represented as a 2D vector.
+        """
+        return 500
+    
+    def __str__(self):
+        return "VN2"
+    
+    def to_string(self, state):
+        return f"(The head in the middle. Food = 1, block = -1 Neigh :\n {np.array(state)}"
+
+
 if __name__ == "__main__":
-    grid = [[0, 3, 3, 3], 
-            [0, 2, 3, 3],
-            [0, 0, 0, 0], 
-            [1, 0, 0, 0]]
-    bracketer = VonNeumann1NeighPlusFoodDirectionBracket()
-    print(bracketer.to_string(bracketer.bracket(grid)))
+    grid = np.array(
+           [[0, 0, 0, 0, 0, 3, 3, 0], 
+            [0, 0, 0, 3, 3, 3, 3, 0],
+            [0, 0, 0, 3, 0, 0, 3, 0], 
+            [0, 0, 0, 3, 3, 0, 3, 0],
+            [0, 0, 0, 0, 3, 0, 3, 0],
+            [0, 0, 0, 0, 2, 0, 3, 0],
+            [0, 0, 0, 0, 0, 0, 3, 0]])
+    bracketer = VonNeumann2Neigh()
+    
+    dic = dict()
+    bin = bracketer.bracket(grid)
+    print(bracketer.to_string(bin))

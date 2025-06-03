@@ -23,7 +23,7 @@ def von_neumann_neigh_radius_1(grid, pos):
         if oob:
             neigh[i] = 1
         else:
-            if grid[rel_pos[i][0]][rel_pos[i][1]] == 3: # there is a block
+            if grid[rel_pos[i][0]][rel_pos[i][1]] == 3 or grid[rel_pos[i][0]][rel_pos[i][1]] == 4: # there is the tail or a block
                 neigh[i] = 1
     return tuple(neigh)
 

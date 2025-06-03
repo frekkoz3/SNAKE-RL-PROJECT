@@ -202,11 +202,12 @@ class RLAlgorithm:
 
 
     def print_q_values(self, bracketer):
-        s = ""
-        for d in self.Qvalues:
-            s = s + f"State ({bracketer.to_string(tuple(d[i] for i in range (len(d) - 1)))}), Action {action_name(d[-1])} : Value {self.Qvalues[d]}\n"
-        print(s)
-
+        """
+            Deprecated. To be redifined.
+        """
+        print("\033[93m[WARNING] This method is deprecated and does not actually works as it should.\033[0m")
+        print(str(self.Qvalues))
+        
     def __str__(self):
         return ""
 
@@ -571,9 +572,5 @@ class AtariDQN(DeepDoubleQLearning):
         # Increment the iteration counter
         self.iterations += 1
 
-
-
-
 if __name__ == "__main__":
-    eps = Epsilon(0.99, "linear", **{"coef" : 0.9, "minimum" : 0.05})
-    print(eps.decay())
+    pass

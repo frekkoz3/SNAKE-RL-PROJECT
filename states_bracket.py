@@ -58,23 +58,6 @@ def von_neumann_neigh(grid, pos, rad):
                 neigh.append(0)
     return neigh
 
-def von_neumann_neigh_radius_1(grid, pos):
-    """
-        The grid is the whole state made up of 0, 1, 2 and 3 (3 for blocks).
-        The position is in the form (y, x) since it is how the grid is decoded (row first matrix)
-    """
-    mov = [(1, 0), (0, 1), (-1, 0), (0, -1)]
-    neigh = [0, 0, 0, 0]
-    rel_pos = [(pos[0]+m[0], pos[1]+m[1]) for m in mov]
-    outside = [out_of_border(grid, r) for r in rel_pos]
-    for i, oob in enumerate(outside):
-        if oob:
-            neigh[i] = 1
-        else:
-            if grid[rel_pos[i][0]][rel_pos[i][1]] == 3 or grid[rel_pos[i][0]][rel_pos[i][1]] == 4: # there is the tail or a block
-                neigh[i] = 1
-    return tuple(neigh)
-
 # SUPER CLASS
 class StateBracket():
     """

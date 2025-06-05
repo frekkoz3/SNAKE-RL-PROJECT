@@ -9,11 +9,12 @@ General:
 6. [ ] To implement the Policy Gradient
 7. [ ] To finish `main.py`
 8. [ ] To implement the Atari-DQN with Convolutional NN and stack of states as input
+9. [ ] Adding why we do not use simple mdp strategies
 
 ---
 
 #### Frekko:
-Work on the technical details. Fix the protocol for all classes and the project in general. Implement the new classes.
+Work on the technical details. Fix the protocol for all classes and the project in general. Write the project.ipynb.
 
 #### Enrico:
 Work on the DQL.

@@ -85,6 +85,9 @@ class RLAlgorithm:
     """
 
     def __init__(self, action_space):
+        """
+            The action space is required to be an integer which state the maximum index for an action (from 0 up to the action space).
+        """
         self.Qvalues = defaultdict(int)
         self.action_space = action_space
         self.iterations = 0 # This is used to count how many iteration until convergence

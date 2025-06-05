@@ -97,7 +97,8 @@ class RLAlgorithm:
 
     def get_action_epsilon_greedy(self, s, eps, possible_actions=None):
         """
-        Chooses action at random using an epsilon-greedy policy wrt the current Q(s,a).
+            Chooses action at random using an epsilon-greedy policy wrt the current Q(s,a).
+            It also automatically complete the dictionary for the state with all possible actions.
         """
         complete_subkey(self.Qvalues, s, default=[i for i in range (self.action_space)])
         ran = np.random.rand()
@@ -113,6 +114,10 @@ class RLAlgorithm:
         return a 
         
     def get_action_greedy(self, s, possible_action = None):
+        """
+            Return the action from the greedy policy.
+            If there are no possible action it firstly complete the subkey and then excract one action.
+        """
         if possible_action is None:
             complete_subkey(self.Qvalues, s, default=[i for i in range (self.action_space)])
             a = argmax_over_dict_given_subkey(self.Qvalues, (*s, ), default=[i for i in range (self.action_space)])[-1]
@@ -199,7 +204,6 @@ class RLAlgorithm:
         env.close()
 
         return total_reward
-
 
     def print_q_values(self, bracketer):
         """

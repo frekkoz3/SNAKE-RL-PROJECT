@@ -245,7 +245,7 @@ class Montecarlo(RLAlgorithm):
             while not done and keep:
 
                 new_s, reward, done, trunc, inf = env.step(action)
-                if inf != {}:
+                if inf != {}:        #if inf is not empty => an unfeasible action was tried => the actual action is different (written in inf)
                     action = inf["act"]
                 new_s = bracketer.bracket(new_s)
 

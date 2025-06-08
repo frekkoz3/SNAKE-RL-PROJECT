@@ -90,7 +90,12 @@ class RLAlgorithm:
         """
         self.Qvalues = defaultdict(int)
         self.action_space = action_space
-        self.iterations = 0 # This is used to count how many iteration until convergence
+        self.iterations = 0         # This is used to count how many iteration until convergence
+        # this last part differentiates between temporal-difference based algorithm and Monte Carlo based (the function learining changes a bit)
+        if self.single_step_update.__func__ is not RLAlgorithm.single_step_update:   #single_step_update was overridden
+            self.update_at = "step"
+        elif self.single_episode_update.__func__ is not RLAlgorithm.single_episode_update:   #single_episode_update was overidden
+            self.update_at = "episode"
 
     def single_step_update(self, s, a, r, new_s, new_a, done):
         """
@@ -98,24 +103,28 @@ class RLAlgorithm:
         """
         pass
 
-    def get_action_epsilon_greedy(self, s, eps, possible_actions=None):
+    def single_episode_update(self, episode):
         """
+            This function does an update with a whole trajectory
             Chooses action at random using an epsilon-greedy policy wrt the current Q(s,a).
             It also automatically complete the dictionary for the state with all possible actions.
+
         """
-        complete_subkey(self.Qvalues, s, default=[i for i in range (self.action_space)])
-        ran = np.random.rand()
+        pass
+
+    def get_action_during_learning(self, s, eps, possible_actions=None):
+        """
+            Chooses action depending on the current policy used during learning
+        """
+        pass
         
-        if (ran < eps):
-            prob_actions = np.ones(self.action_space)/self.action_space
-        else:
-            prob_actions = np.zeros(self.action_space)
-            prob_actions[argmax_over_dict_given_subkey(self.Qvalues, (*s, ), default=[i for i in range (self.action_space)])[-1]] = 1
-            
-        # take one action from the array of actions with the probabilities as defined above.
-        a = np.random.choice(self.action_space, p=prob_actions)
-        return a 
-        
+
+    def get_action_during_evaluation(self, s, possible_action = None):
+        """
+            Chooses action depending on the policy used during final evaluation
+        """
+        pass
+
     def get_action_greedy(self, s, possible_action = None):
         """
             Return the action from the greedy policy.
@@ -151,27 +160,36 @@ class RLAlgorithm:
 
             env.reset()
             state = bracketer.bracket(env._get_obs())
-            action = self.get_action_epsilon_greedy(state, eps = eps)
+            
+            action = self.get_action_during_learning(state, eps = eps)
+
+            episode = []
 
             while not done and keep:
 
                 new_s, reward, done, trunc, inf = env.step(action)
-                if inf != {}:
+                if inf != {}:       #if inf is not empty => the action performed is NOT the action intended(it was unfeasible)
                     action = inf["act"]
                 new_s = bracketer.bracket(new_s)
                 
                 # Keeps track of performance for each episode
                 performance_traj[i] += reward
 
-                possible_actions = env.get_possible_actions(action)
-                new_a = self.get_action_epsilon_greedy(new_s, eps, possible_actions=possible_actions)
+                episode.append((state, action, reward))
 
-                self.single_step_update(state, action, reward, new_s, new_a, done)
+                possible_actions = env.get_possible_actions(action)
+                new_a = self.get_action_during_learning(new_s, eps, possible_actions=possible_actions)
+
+                if self.update_at == "step":
+                    self.single_step_update(state, action, reward, new_s, new_a, done)
                 
                 action = new_a
                 state = new_s
 
                 keep = env.render()
+            
+            if self.update_at == "episode":
+                self.single_episode_update(episode)
 
             if i % 100 == 0:
                 clear_output(wait=False)
@@ -197,7 +215,7 @@ class RLAlgorithm:
 
         while not done and keep:
             possible_actions = env.get_possible_actions(action)
-            action = self.get_action_greedy(state, possible_actions)
+            action = self.get_action_during_evaluation(state, possible_actions)
             state, reward, done, trunc, inf = env.step(action)
             state = bracketer.bracket(state)
             keep = env.render()
@@ -230,63 +248,43 @@ class Montecarlo(RLAlgorithm):
         self.lr_v = lr_v
         self.returns = defaultdict(list)  # To store returns for each state-action pair
 
-    def learning(self, env, epsilon_schedule, n_episodes, bracketer):
+    def get_action_during_learning(self, s, eps, possible_actions=None):
+        
+        #   Chooses action at random using an epsilon-greedy policy wrt the current Q(s,a).
+        #   It also automatically complete the dictionary for the state with all possible actions.
+       
+        complete_subkey(self.Qvalues, s, default=[i for i in range (self.action_space)])
+        ran = np.random.rand()
+        
+        if (ran < eps):
+            prob_actions = np.ones(self.action_space)/self.action_space
+        else:
+            prob_actions = np.zeros(self.action_space)
+            prob_actions[argmax_over_dict_given_subkey(self.Qvalues, (*s, ), default=[i for i in range (self.action_space)])[-1]] = 1
+            
+        # take one action from the array of actions with the probabilities as defined above.
+        a = np.random.choice(self.action_space, p=prob_actions)
+        return a 
 
-        performance_traj = np.zeros(n_episodes)
-
-        state, _ = env.reset()
-
-        for i in range(n_episodes):
-
-            eps = epsilon_schedule.decay()
-
-            done = False
-            keep = True
-
-            env.reset()
-            state = bracketer.bracket(env._get_obs())
-            possible_actions = env.get_possible_actions(None)
-            action = self.get_action_epsilon_greedy(state, eps=eps, possible_actions=possible_actions)
-
-            episode = []
-
-            while not done and keep:
-
-                new_s, reward, done, trunc, inf = env.step(action)
-                if inf != {}:
-                    action = inf["act"]
-                new_s = bracketer.bracket(new_s)
-
-                # Keeps track of performance for each episode
-                performance_traj[i] += reward
-
-                episode.append((state, action, reward))
-
-                possible_actions = env.get_possible_actions(action)
-
-                new_a = self.get_action_epsilon_greedy(new_s, eps, possible_actions)
-
-                state = new_s
-                action = new_a
-
-                keep = env.render()
-
-
-            # After the episode ends, we update the Q-values
-            G = 0
-            for state, action, reward in reversed(episode):
-                G = reward + self.gamma * G
-                self.returns[(*state, action)].append(G)
-                # Update the Q-value for the state-action pair
-                self.Qvalues[(*state, action)] = np.mean(self.returns[(*state, action)])
-
-            clear_output()
-            print(f'Episode {i}/{n_episodes}')
-
-        print("\n\nLearning finished\n\n")
-        for i in range(len(performance_traj)):
-            if i % 100 == 0:
-                print(f"Episode {i}/{n_episodes} : Performance {performance_traj[i]}")
+    def get_action_during_evaluation(self, s, possible_action = None):
+        #   Return the action from the greedy policy.
+        #  If there are no possible action it firstly complete the subkey and then excract one action.
+        
+        if possible_action is None:
+            complete_subkey(self.Qvalues, s, default=[i for i in range (self.action_space)])
+            a = argmax_over_dict_given_subkey(self.Qvalues, (*s, ), default=[i for i in range (self.action_space)])[-1]
+        else:
+            a = argmax_over_dict_given_subkey_and_possible_action(self.Qvalues, (*s, ), possible_action, default=[i for i in range (self.action_space)])[-1]
+        return a
+    
+    def single_episode_update(self, episode):
+        # After the episode ends, we update the Q-values
+        G = 0
+        for state, action, reward in reversed(episode):
+            G = reward + self.gamma * G
+            self.returns[(*state, action)].append(G)
+            # Update the Q-value for the state-action pair
+            self.Qvalues[(*state, action)] = np.mean(self.returns[(*state, action)])
 
     def name(self):
         return "Montecarlo"
@@ -300,7 +298,36 @@ class SARSA(RLAlgorithm):
         self.gamma = gamma
         # the learning rate
         self.lr_v = lr_v
+
+    def get_action_during_learning(self, s, eps, possible_actions=None):
+        
+        #   Chooses action at random using an epsilon-greedy policy wrt the current Q(s,a).
+        #   It also automatically complete the dictionary for the state with all possible actions.
+       
+        complete_subkey(self.Qvalues, s, default=[i for i in range (self.action_space)])
+        ran = np.random.rand()
+        
+        if (ran < eps):
+            prob_actions = np.ones(self.action_space)/self.action_space
+        else:
+            prob_actions = np.zeros(self.action_space)
+            prob_actions[argmax_over_dict_given_subkey(self.Qvalues, (*s, ), default=[i for i in range (self.action_space)])[-1]] = 1
+            
+        # take one action from the array of actions with the probabilities as defined above.
+        a = np.random.choice(self.action_space, p=prob_actions)
+        return a 
     
+    def get_action_during_evaluation(self, s, possible_action = None):
+        #   Return the action from the greedy policy.
+        #  If there are no possible action it firstly complete the subkey and then excract one action.
+        
+        if possible_action is None:
+            complete_subkey(self.Qvalues, s, default=[i for i in range (self.action_space)])
+            a = argmax_over_dict_given_subkey(self.Qvalues, (*s, ), default=[i for i in range (self.action_space)])[-1]
+        else:
+            a = argmax_over_dict_given_subkey_and_possible_action(self.Qvalues, (*s, ), possible_action, default=[i for i in range (self.action_space)])[-1]
+        return a
+
     def single_step_update(self, s, a, r, new_s, new_a, done):
         """
         Uses a single step to update the values, using Temporal Difference for Q values.
@@ -330,6 +357,35 @@ class SARSALambda(RLAlgorithm):
         # eligibility traces
         self.e = Eligibility(lambda_value, gamma)
 
+    def get_action_during_learning(self, s, eps, possible_actions=None):
+        
+        #   Chooses action at random using an epsilon-greedy policy wrt the current Q(s,a).
+        #   It also automatically complete the dictionary for the state with all possible actions.
+       
+        complete_subkey(self.Qvalues, s, default=[i for i in range (self.action_space)])
+        ran = np.random.rand()
+        
+        if (ran < eps):
+            prob_actions = np.ones(self.action_space)/self.action_space
+        else:
+            prob_actions = np.zeros(self.action_space)
+            prob_actions[argmax_over_dict_given_subkey(self.Qvalues, (*s, ), default=[i for i in range (self.action_space)])[-1]] = 1
+            
+        # take one action from the array of actions with the probabilities as defined above.
+        a = np.random.choice(self.action_space, p=prob_actions)
+        return a 
+
+    def get_action_during_evaluation(self, s, possible_action = None):
+        #   Return the action from the greedy policy.
+        #  If there are no possible action it firstly complete the subkey and then excract one action.
+        
+        if possible_action is None:
+            complete_subkey(self.Qvalues, s, default=[i for i in range (self.action_space)])
+            a = argmax_over_dict_given_subkey(self.Qvalues, (*s, ), default=[i for i in range (self.action_space)])[-1]
+        else:
+            a = argmax_over_dict_given_subkey_and_possible_action(self.Qvalues, (*s, ), possible_action, default=[i for i in range (self.action_space)])[-1]
+        return a
+
     def single_step_update(self, s, a, r, new_s, new_a, done):
         if done:
             # SARSA(λ): δ = R - Q(s,a)
@@ -357,6 +413,35 @@ class QLearning(RLAlgorithm):
         # the learning rate
         self.lr_v = lr_v
     
+    def get_action_during_learning(self, s, eps, possible_actions=None):
+        
+        #   Chooses action at random using an epsilon-greedy policy wrt the current Q(s,a).
+        #   It also automatically complete the dictionary for the state with all possible actions.
+       
+        complete_subkey(self.Qvalues, s, default=[i for i in range (self.action_space)])
+        ran = np.random.rand()
+        
+        if (ran < eps):
+            prob_actions = np.ones(self.action_space)/self.action_space
+        else:
+            prob_actions = np.zeros(self.action_space)
+            prob_actions[argmax_over_dict_given_subkey(self.Qvalues, (*s, ), default=[i for i in range (self.action_space)])[-1]] = 1
+            
+        # take one action from the array of actions with the probabilities as defined above.
+        a = np.random.choice(self.action_space, p=prob_actions)
+        return a 
+
+    def get_action_during_evaluation(self, s, possible_action = None):
+        #   Return the action from the greedy policy.
+        #  If there are no possible action it firstly complete the subkey and then excract one action.
+        
+        if possible_action is None:
+            complete_subkey(self.Qvalues, s, default=[i for i in range (self.action_space)])
+            a = argmax_over_dict_given_subkey(self.Qvalues, (*s, ), default=[i for i in range (self.action_space)])[-1]
+        else:
+            a = argmax_over_dict_given_subkey_and_possible_action(self.Qvalues, (*s, ), possible_action, default=[i for i in range (self.action_space)])[-1]
+        return a
+
     def single_step_update(self, s, a, r, new_s, new_a, done):
         """
         Uses a single step to update the values, using Temporal Difference for Q values.
@@ -403,7 +488,7 @@ class DeepDoubleQLearning(RLAlgorithm):
         self.dqn_target.eval()
 
 
-    def get_action_epsilon_greedy(self, state, eps, possible_actions=None):
+    def get_action_during_learning(self, state, eps, possible_actions=None):
         if np.random.rand() < eps: # Explore
             if possible_actions is None:
                 possible_actions = list(range(self.action_space))
@@ -423,7 +508,7 @@ class DeepDoubleQLearning(RLAlgorithm):
                 return possible_actions[best_action_idx_in_subset]
 
 
-    def get_action_greedy(self, state, possible_actions=None):
+    def get_action_during_evaluation(self, state, possible_actions=None):
         qvals = self.dqn_target(torch.tensor(state, dtype=torch.float32, device=self.device).unsqueeze(0))
         best = qvals.argmax(dim=1).item()
         if possible_actions is None or best in possible_actions:
@@ -517,6 +602,34 @@ class AtariDQN(DeepDoubleQLearning):
 
         self.optimizer = torch.optim.Adam(self.dqn_online.parameters(), lr=self.lr_v)
 
+    def get_action_during_learning(self, s, eps, possible_actions=None):
+        
+        #   Chooses action at random using an epsilon-greedy policy wrt the current Q(s,a).
+        #   It also automatically complete the dictionary for the state with all possible actions.
+       
+        complete_subkey(self.Qvalues, s, default=[i for i in range (self.action_space)])
+        ran = np.random.rand()
+        
+        if (ran < eps):
+            prob_actions = np.ones(self.action_space)/self.action_space
+        else:
+            prob_actions = np.zeros(self.action_space)
+            prob_actions[argmax_over_dict_given_subkey(self.Qvalues, (*s, ), default=[i for i in range (self.action_space)])[-1]] = 1
+            
+        # take one action from the array of actions with the probabilities as defined above.
+        a = np.random.choice(self.action_space, p=prob_actions)
+        return a 
+
+    def get_action_during_evaluation(self, s, possible_action = None):
+        #   Return the action from the greedy policy.
+        #  If there are no possible action it firstly complete the subkey and then excract one action.
+        
+        if possible_action is None:
+            complete_subkey(self.Qvalues, s, default=[i for i in range (self.action_space)])
+            a = argmax_over_dict_given_subkey(self.Qvalues, (*s, ), default=[i for i in range (self.action_space)])[-1]
+        else:
+            a = argmax_over_dict_given_subkey_and_possible_action(self.Qvalues, (*s, ), possible_action, default=[i for i in range (self.action_space)])[-1]
+        return a
 
     def single_step_update(self, s, a, r, new_s, new_a, done):
         """
@@ -580,4 +693,14 @@ class AtariDQN(DeepDoubleQLearning):
         self.iterations += 1
 
 if __name__ == "__main__":
-    pass
+    
+    # General Settings 
+    gamma = 0.99
+    lr_v = 0.15
+    n_episodes = 2500
+    env = SnakeEnv(render_mode="nonhuman", max_step=1000)
+    Q_p = Montecarlo(env.action_space.n, gamma=gamma, lr_v=lr_v)
+
+    print(Q_p.update_at)
+
+

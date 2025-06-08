@@ -3,6 +3,7 @@
     This work is part of the final project for the 2024-2025 Reinforcement Learning course at the University of Trieste.
 """
 import numpy as np
+
 def out_of_border(grid, pos):
     max_y = len(grid)
     max_x = len(grid[0])
@@ -10,23 +11,54 @@ def out_of_border(grid, pos):
     x = pos[1]
     return y >= max_y or y < 0 or x >= max_x or x < 0
 
-def von_neumann_neigh_radius_1(grid, pos):
+def out_of_border_faster(max_y, max_x, y, x):
+    return y >= max_y or y < 0 or x >= max_x or x < 0
+
+def moore_neigh(grid, pos, rad):
     """
-        The grid is the whole state made up of 0, 1, 2 and 3 (3 for blocks).
-        The position is in the form (y, x) since it is how the grid is decoded (row first matrix)
+        This is a general function to compute, given a position on a grid world, its correspective Moore neighborhood of radius r.
     """
-    mov = [(1, 0), (0, 1), (-1, 0), (0, -1)]
-    neigh = [0, 0, 0, 0]
-    rel_pos = [(pos[0]+m[0], pos[1]+m[1]) for m in mov]
-    outside = [out_of_border(grid, r) for r in rel_pos]
-    for i, oob in enumerate(outside):
-        if oob:
-            neigh[i] = 1
+    max_y = len(grid)
+    max_x = len(grid[0])
+    y, x = pos
+    y_pos = [p for p in range (y - rad, y + rad + 1)]
+    x_pos = [p for p in range (x - rad, x + rad + 1)]
+    neigh_pos = [[y_p, x_p] for y_p in y_pos for x_p in x_pos]
+    neigh = []
+    for n in neigh_pos:
+        n_y, n_x = n
+        if out_of_border_faster(max_y, max_x, n_y, n_x):
+            neigh.append(1)
+        elif grid[n_y][n_x] >= 3:
+            neigh.append(1)
         else:
-            if grid[rel_pos[i][0]][rel_pos[i][1]] == 3: # there is a block
-                neigh[i] = 1
+            neigh.append(0)
     return tuple(neigh)
 
+def von_neumann_neigh(grid, pos, rad):
+    """
+        This is a general function to compute, given a position on a grid world, its correspective Von Neumann neighborhood of radius r.
+    """
+    max_y = len(grid)
+    max_x = len(grid[0])
+    y, x = pos
+    # We take the moore and substract those positions that doesn't hold |x-x0| + |y - y0| <= r
+    y_pos = [p for p in range (y - rad, y + rad + 1)]
+    x_pos = [p for p in range (x - rad, x + rad + 1)]
+    neigh_pos = [[y_p, x_p] for y_p in y_pos for x_p in x_pos]
+    neigh = []
+    for n in neigh_pos:
+        n_y, n_x = n
+        if (abs(x - n_x) + abs(y - n_y)) <= rad:
+            if out_of_border_faster(max_y, max_x, n_y, n_x):
+                neigh.append(1)
+            elif grid[n_y][n_x] >= 3:
+                neigh.append(1)
+            else:
+                neigh.append(0)
+    return neigh
+
+# SUPER CLASS
 class StateBracket():
     """
         A State Bracket is an object that takes a state as input and using some *defined* transformation returns a "bracket" for that state.
@@ -75,6 +107,7 @@ class StateBracket():
         """
         pass
 
+# ONLY FOOD BRACKETER
 class FoodRelativePositionBracket(StateBracket):
     """
         Specific State Bracket for the snake game.
@@ -112,39 +145,6 @@ class FoodRelativePositionBracket(StateBracket):
     def to_string(self, state):
         dx, dy = state
         return f"(dx : {dx}, dy : {dy})"
-
-class VonNeumann1NeighPlusFoodRelPosBracket(StateBracket):
-    def bracket(self, state):
-        """
-            Input : generic state
-            Output : some feature of the state representing the bracket containing the state
-
-            This bracketer takes as input the whole grid world. Returns as output the relative position of the food wrt the head of the snake
-            plus the type of block (0 if not blocked, 1 if blocked) in the von neumann neighborhood of radius 1 of the head of the snake.
-            The state representation is (dx, dy, s, e, n, w). 
-        """
-        grid = state 
-        hx, hy, fx, fy = 0, 0, 0, 0
-        for i, row in enumerate(grid):
-            for j, cel in enumerate(row):
-                if cel == 2: # head has value 2
-                    hx = j
-                    hy = i
-                if cel == 1: # food has value 1
-                    fx = j
-                    fy = i
-        
-        return (fx - hx, fy - hy, *von_neumann_neigh_radius_1(grid, [hy, hx]))
-    
-    def get_state_dim(self):
-        return 6 # 2 for the food rel position, 4 for the von neumann neighborhood
-    
-    def __str__(self):
-        return "VN1 FRP"
-    
-    def to_string(self, state):
-        dx, dy, s, e, n, w = state
-        return f"(dx : {dx}, dy : {dy}) Neigh : [S:{s}][E:{e}][N:{n}][W:{w}]"
     
 class FoodDirectionBracket(StateBracket):
     """
@@ -187,154 +187,26 @@ class FoodDirectionBracket(StateBracket):
         ds, de, dn, dw = state
         return f"(ds : {ds}, de : {de}, dn : {dn}, dw : {dw})"
 
-class VonNeumann1NeighPlusFoodDirectionBracket(StateBracket):
-    """
-        Specific State Bracket for the snake game.
-    """
-
-    def bracket(self, state):
+# FOOD PLUS NEIGHBORHOOD BRACKETER
+class NeighPlusFoodRelativePositionBracket(StateBracket):
+    def __init__(self, neigh = "V", radius = 1):
         """
-            Input : generic state
-            Output : some feature of the state representing the bracket containing the state
-
-            This bracketer takes as input the whole grid world. Returns as output the direction of the food wrt the head of the snake plus the von neumann neighborhood
-            It look for the axis and says : 1 if the food is above the head, -1 if the food is under the head and 0 otherwise
-            (rel_y, rel_x)
+            This bracketer is a generalization of all others bracketers that combines neighborhood and food relative position informations. 
+            It does not implement to_string(state) and neither get_state_dim().
+            Input are the neighborhood type, "V" for Von Neumann, "M" for Moore, and the radius.
         """
-        grid = state 
-        hx, hy, fx, fy = 0, 0, 0, 0
-        for i, row in enumerate(grid):
-            for j, cel in enumerate(row):
-                if cel == 2: # head has value 2
-                    hx = j
-                    hy = i
-                if cel == 1: # food has value 1
-                    fx = j
-                    fy = i
-
-        return (int(hy < fy), int(hx < fx), int(hy > fy), int(hx > fx), *von_neumann_neigh_radius_1(grid, [hy, hx]))
-
-    def get_state_dim(self):
-        """
-            Returns the dimension of the state space.
-            In this case, the relative position of the food wrt the head of the snake can be represented as a 2D vector.
-        """
-        return 8
-    
-    def __str__(self):
-        return "VN1 FD"
-    
-    def to_string(self, state):
-        ds, de, dn, dw, s, e, n, w = state
-        return f"(ds : {ds}, de : {de}, dn : {dn}, dw : {dw}) Neigh : [S:{s}][E:{e}][N:{n}][W:{w}]"
-
-class VonNeumann2Neigh(StateBracket):
-    """
-        Specific State Bracket for the snake game.
-    """
-
-    def bracket(self, state):
-        """
-            Input : generic state
-            Output : some feature of the state representing the bracket containing the state
-
-            This bracketer takes as input the whole grid world. 
-            Returns as output the von neumann neighborhood of distance 2 as a 5x5 grid around the snake's head 
-            (free cell = 0, block or outside = -1, food = 1) 
-        """
-        head_pos = np.argwhere(state == 2)[0].tolist()      
-
-        neigh = np.zeros((5,5)) - 1   #this will hold the result of binning. The initial value is -1 because only the cells inside the grid will be changed
-       
-        for (i, j) in np.ndindex(state.shape):                  #we iterate over all indices of the cells in the grid
-            neigh_index = (i - head_pos[0] + 2, j - head_pos[1] + 2)    #corresponding index for the output array neigh
-
-            if abs(i - head_pos[0]) + abs(j - head_pos[1]) <= 2:          #we consider only the cells at distance <= 2 from the head
-                if state[i, j] == 0:
-                    neigh[neigh_index] = 0
-                if state[i, j] == 1:
-                    neigh[neigh_index] = 1
-                elif state[i, j] == 3:
-                   neigh[neigh_index] = -1       
-
-        return tuple(tuple(map(int, row))  for row in neigh.tolist())
-         
-        
-
-    def get_state_dim(self):
-        """
-            Returns the dimension of the state space.
-            In this case, a 5x5 grid around the snake's head
-        """
-        return 25
-    
-    def __str__(self):
-        return "VN2"
-    
-    def to_string(self, state):
-        return f"(The head in the middle. Food = 1, block = -1 Neigh :\n {np.array(state)}"
-
-class SquaredNeigh(StateBracket):
-    """
-        Specific State Bracket for the snake game.
-    """
-    def __init__(self, size):
         super().__init__()
-        self.size = size
-
+        self.neigh_name = neigh
+        self.neigh = moore_neigh if neigh == "M" else von_neumann_neigh
+        self.radius = radius
+    
     def bracket(self, state):
         """
             Input : generic state
             Output : some feature of the state representing the bracket containing the state
 
-            This bracketer takes as input the whole grid world. 
-            Returns as output the sizexsize grid around the snake's head
-            (free cell = 0, block or outside = -1, food = 1) 
-        """
-        head_pos = np.argwhere(state == 2)[0].tolist()      
-
-        neigh = np.zeros((self.size,self.size)) - 1   #this will hold the result of binning. The initial value is -1 because only the cells inside the grid will be changed
-        
-        for (i, j) in np.ndindex(state.shape):                          #we iterate over all indices of the cells in the grid
-            neigh_index = (i - head_pos[0] + self.size//2, j - head_pos[1] + self.size//2)    #corresponding index for the output array neigh
-            
-            if all(0 <= neigh_index[k] < self.size for k in range(2)):        #this checks if we are inside the sizexsize grid
-                
-                if state[i, j] == 0:
-                    neigh[neigh_index] = 0
-                if state[i, j] == 1:
-                    neigh[neigh_index] = 1
-                elif state[i, j] == 3:
-                    neigh[neigh_index] = -1       
-
-        return tuple(tuple(map(int, row))  for row in neigh.tolist())
-
-    def get_state_dim(self):
-        """
-            Returns the dimension of the state space.
-            In this case, a sizexsize grid around the snake's head
-        """
-        return self.size**2
-    
-    def __str__(self):
-        return "squared neigh"
-    
-    def to_string(self, state):
-        return f"The head in the middle. Food = 1, block = -1 Neigh :\n {np.array(state)}"
-
-class VonNeumann2NeighPlusFoodDirectionBracket(StateBracket):
-    """
-        Specific State Bracket for the snake game.
-    """
-
-    def bracket(self, state):
-        """
-            Input : generic state
-            Output : some feature of the state representing the bracket containing the state
-
-            This bracketer takes as input the whole grid world. 
-            Returns as output the von neumann neighborhood of distance 2 as a 5x5 grid around the snake's head, plus the food direction
-            (free cell = 0, block or outside = -1, food = 1) 
+            This bracketer takes as input the whole grid world. Returns as output the relative position of the food wrt the head of the snake plus the desider neighborhood information.
+            In the neighborhood it says : 0 if the cell is empty, 1 if the cell is occupied by a block or by the tail.
         """
         grid = state 
         hx, hy, fx, fy = 0, 0, 0, 0
@@ -346,38 +218,41 @@ class VonNeumann2NeighPlusFoodDirectionBracket(StateBracket):
                 if cel == 1: # food has value 1
                     fx = j
                     fy = i
-        return (int(hy < fy), int(hx < fx), int(hy > fy), int(hx > fx), *von_neumann_neigh_radius_2(grid))
-         
-        
 
-    def get_state_dim(self):
-        """
-            Returns the dimension of the state space.
-            In this case, a 5x5 grid around the snake's head plus 4 bits for food direction
-        """
-        return 29   #25(VN2) + 4(food direction)
+        return (fx - hx, fy - hy, *self.neigh(grid, [hy, hx], self.radius))
     
     def __str__(self):
-        return "VN2 with food direction"
+        return f"{self.neigh_name}{self.radius} FRP"
+
+    def get_state_dim(self):
+        if self.neigh_name == "M":
+            return (2*self.radius + 1)*(2*self.radius + 1) + 2
+        return self.radius*self.radius + (self.radius + 1)*(self.radius + 1) + 2    
     
-    def to_string(self, state):
-        return f"(ds : {state[0]}, de : {state[1]}, dn : {state[2]}, dw : {state[3]}) The head in the middle. Food = 1, block = -1  Neigh :\n {np.array(state[4:])} "
-
-class VonNeumann1NeighPlusFoodDirectionBracketPlusLengthTail(StateBracket):
-    """
-        Specific State Bracket for the snake game.
-    """
-
+class NeighPlusFoodDirectionBracket(StateBracket):
+    def __init__(self, neigh = "V", radius = 1):
+        """
+            This bracketer is a generalization of all others bracketers that combines neighborhood and food direction informations. 
+            It does not implement to_string(state) and neither get_state_dim().
+            Input are the neighborhood type, "V" for Von Neumann, "M" for Moore, and the radius.
+        """
+        super().__init__()
+        self.neigh_name = neigh
+        self.neigh = moore_neigh if neigh == "M" else von_neumann_neigh
+        self.radius = radius
+    
     def bracket(self, state):
         """
             Input : generic state
             Output : some feature of the state representing the bracket containing the state
 
-            This bracketer takes as input the whole grid world. Returns as output the direction of the food wrt the head of the snake plus the von neumann neighborhood, plus the length of the tail
+            This bracketer takes as input the whole grid world. Returns as output the direction of the food wrt the head of the snake plus the desider neighborhood information.
+            It look for the axis and says : 1 if the food is above the head, -1 if the food is under the head and 0 otherwise
+            (rel_y, rel_x).
+            In the neighborhood it says : 0 if the cell is empty, 1 if the cell is occupied by a block or by the tail.
         """
         grid = state 
         hx, hy, fx, fy = 0, 0, 0, 0
-        length_tail = 0
         for i, row in enumerate(grid):
             for j, cel in enumerate(row):
                 if cel == 2: # head has value 2
@@ -386,25 +261,146 @@ class VonNeumann1NeighPlusFoodDirectionBracketPlusLengthTail(StateBracket):
                 if cel == 1: # food has value 1
                     fx = j
                     fy = i
-                if cel == 3:  # tail has value 3
-                    length_tail += 1
 
-        return (int(hy < fy), int(hx < fx), int(hy > fy), int(hx > fx), length_tail, *von_neumann_neigh_radius_1(grid, [hy, hx]))
-
-    def get_state_dim(self):
-        """
-            Returns the dimension of the state space.
-            In this case, the relative position of the food wrt the head of the snake can be represented as a 2D vector.
-        """
-        return 9
+        return (int(hy < fy), int(hx < fx), int(hy > fy), int(hx > fx), *self.neigh(grid, [hy, hx], self.radius))
     
     def __str__(self):
-        return "VN1 FD LTail"
-    
-    def to_string(self, state):
-        ds, de, dn, dw, l, s, e, n, w = state
-        return f"(ds : {ds}, de : {de}, dn : {dn}, dw : {dw}) length tail : {l} Neigh : [S:{s}][E:{e}][N:{n}][W:{w}]"
+        return f"{self.neigh_name}{self.radius} FD"
 
+    def get_state_dim(self):
+        if self.neigh_name == "M":
+            return (2*self.radius + 1)*(2*self.radius + 1) + 4
+        return self.radius*self.radius + (self.radius + 1)*(self.radius + 1) + 4    
+
+# ONLY NEIGHBORHOOD BRACKETER
+class NeighborhoodBracket(StateBracket):
+    def __init__(self, neigh = "V", radius = 1):
+        """
+            This bracketer is a generalization of all others bracketers that combines neighborhood and food direction informations. 
+            It does not implement to_string(state) and neither get_state_dim().
+            Input are the neighborhood type, "V" for Von Neumann, "M" for Moore, and the radius.
+        """
+        super().__init__()
+        self.neigh_name = neigh
+        self.neigh = moore_neigh if neigh == "M" else von_neumann_neigh
+        self.radius = radius
+
+    def bracket(self, state):
+        """
+            Input : generic state
+            Output : some feature of the state representing the bracket containing the state
+
+            This bracketer takes as input the whole grid world. 
+            Returns as output the desidered neighboorhood informations. 
+            In the neighborhood it says : 0 if the cell is empty, 1 if the cell is occupied by a block or by the tail.
+        """
+        grid = state 
+        hx, hy, = 0, 0
+        for i, row in enumerate(grid):
+            for j, cel in enumerate(row):
+                if cel == 2: # head has value 2
+                    hx = j
+                    hy = i
+
+        return (*self.neigh(grid, [hy, hx], self.radius), )
+
+    def __str__(self):
+        return self.neigh_name
+    
+    def get_state_dim(self):
+        if self.neigh_name == "M":
+            return (2*self.radius + 1)*(2*self.radius + 1)
+        return self.radius*self.radius + (self.radius + 1)*(self.radius + 1)  
+    
+# FOOD PLUS NEIGHBORHOOD PLUS TAIL BRACKETER 
+class NeighPlusFoodRelativePositionPlusTailBracket(StateBracket):
+    def __init__(self, neigh = "V", radius = 1):
+        """
+            This bracketer is a generalization of all others bracketers that combines neighborhood and food relative position informations. 
+            It does not implement to_string(state) and neither get_state_dim().
+            Input are the neighborhood type, "V" for Von Neumann, "M" for Moore, and the radius.
+        """
+        super().__init__()
+        self.neigh_name = neigh
+        self.neigh = moore_neigh if neigh == "M" else von_neumann_neigh
+        self.radius = radius
+    
+    def bracket(self, state):
+        """
+            Input : generic state
+            Output : some feature of the state representing the bracket containing the state
+
+            This bracketer takes as input the whole grid world. Returns as output the length of the tail plus the relative position of the food wrt the head of the snake plus the desider neighborhood information.
+            In the neighborhood it says : 0 if the cell is empty, 1 if the cell is occupied by a block or by the tail.
+        """
+        grid = state 
+        hx, hy, fx, fy = 0, 0, 0, 0
+        tail = 0
+        for i, row in enumerate(grid):
+            for j, cel in enumerate(row):
+                if cel == 3: # tail has value 3
+                    tail += 1
+                if cel == 2: # head has value 2
+                    hx = j
+                    hy = i
+                if cel == 1: # food has value 1
+                    fx = j
+                    fy = i
+
+        return (tail, fx - hx, fy - hy, *self.neigh(grid, [hy, hx], self.radius))
+    
+    def __str__(self):
+        return f"{self.neigh_name}{self.radius} FRP T"
+
+    def get_state_dim(self):
+        if self.neigh_name == "M":
+            return (2*self.radius + 1)*(2*self.radius + 1) + 2 + 1
+        return self.radius*self.radius + (self.radius + 1)*(self.radius + 1) + 2 + 1
+
+class NeighPlusFoodDirectionPlusTailBracket(StateBracket):
+    def __init__(self, neigh = "V", radius = 1):
+        """
+            This bracketer is a generalization of all others bracketers that combines neighborhood and food relative position informations. 
+            It does not implement to_string(state) and neither get_state_dim().
+            Input are the neighborhood type, "V" for Von Neumann, "M" for Moore, and the radius.
+        """
+        super().__init__()
+        self.neigh_name = neigh
+        self.neigh = moore_neigh if neigh == "M" else von_neumann_neigh
+        self.radius = radius
+    
+    def bracket(self, state):
+        """
+            Input : generic state
+            Output : some feature of the state representing the bracket containing the state
+
+            This bracketer takes as input the whole grid world. Returns as output the length of the tail plus the relative position of the food wrt the head of the snake plus the desider neighborhood information.
+            In the neighborhood it says : 0 if the cell is empty, 1 if the cell is occupied by a block or by the tail.
+        """
+        grid = state 
+        hx, hy, fx, fy = 0, 0, 0, 0
+        tail = 0
+        for i, row in enumerate(grid):
+            for j, cel in enumerate(row):
+                if cel == 3: # tail has value 3
+                    tail += 1
+                if cel == 2: # head has value 2
+                    hx = j
+                    hy = i
+                if cel == 1: # food has value 1
+                    fx = j
+                    fy = i
+
+        return (tail, int(hy < fy), int(hx < fx), int(hy > fy), int(hx > fx), *self.neigh(grid, [hy, hx], self.radius))
+    
+    def __str__(self):
+        return f"{self.neigh_name}{self.radius} FRP T"
+
+    def get_state_dim(self):
+        if self.neigh_name == "M":
+            return (2*self.radius + 1)*(2*self.radius + 1) + 4 + 1
+        return self.radius*self.radius + (self.radius + 1)*(self.radius + 1) + 4 + 1
+    
 if __name__ == "__main__":
     grid = np.array(
            [[0, 0, 0, 0, 0, 3, 3, 0], 
@@ -414,7 +410,5 @@ if __name__ == "__main__":
             [0, 0, 0, 0, 3, 0, 3, 0],
             [0, 0, 0, 0, 2, 0, 3, 0],
             [0, 0, 0, 0, 0, 0, 3, 0]])
-    bracketer = VonNeumann2Neigh()
-    
-    bin = bracketer.bracket(grid)
-    print(bracketer.to_string(bin))
+    pos = [0, 0]
+    print(von_neumann_neigh(grid, pos, 1))

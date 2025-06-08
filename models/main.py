@@ -80,7 +80,8 @@ def train():
     env = SnakeEnv(render_mode='nonhuman')
     if model_name == 'DDQN':
 
-        state_dim = bracketer.get_state_dim()
+        state_dim = bracketer.get_state_dim() # Now i have to implement this
+        print("Now this is to be implemented!")
         batch_size = params[7]
         memory_size = params[8]
         target_update_freq = params[9]
@@ -127,7 +128,7 @@ def play():
         print(f"Invalid model name {model_name}. Supported models are: DDQN, QLearning, SARSA, MC.")
         return
 
-    bracketer = VonNeumann1NeighPlusFoodDirectionBracket()  # Example bracket, can be changed
+    bracketer = NeighPlusFoodDirectionBracket(neigh="V", radius = 1) # Example bracket, can be changed
     env = SnakeEnv(render_mode='human')
 
     try:

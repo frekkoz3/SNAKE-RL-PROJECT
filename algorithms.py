@@ -106,6 +106,9 @@ class RLAlgorithm:
     def single_episode_update(self, episode):
         """
             This function does an update with a whole trajectory
+            Chooses action at random using an epsilon-greedy policy wrt the current Q(s,a).
+            It also automatically complete the dictionary for the state with all possible actions.
+
         """
         pass
 
@@ -115,11 +118,24 @@ class RLAlgorithm:
         """
         pass
         
+
     def get_action_during_evaluation(self, s, possible_action = None):
         """
             Chooses action depending on the policy used during final evaluation
         """
         pass
+
+    def get_action_greedy(self, s, possible_action = None):
+        """
+            Return the action from the greedy policy.
+            If there are no possible action it firstly complete the subkey and then excract one action.
+        """
+        if possible_action is None:
+            complete_subkey(self.Qvalues, s, default=[i for i in range (self.action_space)])
+            a = argmax_over_dict_given_subkey(self.Qvalues, (*s, ), default=[i for i in range (self.action_space)])[-1]
+        else:
+            a = argmax_over_dict_given_subkey_and_possible_action(self.Qvalues, (*s, ), possible_action, default=[i for i in range (self.action_space)])[-1]
+        return a
 
     def save(self, path):
         with open(f"{path}.pkl", 'wb') as f:
@@ -686,4 +702,5 @@ if __name__ == "__main__":
     Q_p = Montecarlo(env.action_space.n, gamma=gamma, lr_v=lr_v)
 
     print(Q_p.update_at)
+
 

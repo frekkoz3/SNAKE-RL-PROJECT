@@ -273,7 +273,8 @@ class Montecarlo(RLAlgorithm):
                 self.Qvalues[(*state, action)] = np.mean(self.returns[(*state, action)])
 
             clear_output()
-            print(f'Episode {i}/{n_episodes}')
+            if i % 100 == 0:
+                print(f'Episode {i}/{n_episodes}')
 
         print("\n\nLearning finished\n\n")
         for i in range(len(performance_traj)):

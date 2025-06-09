@@ -89,7 +89,7 @@ class RLAlgorithm:
             The action space is required to be an integer which state the maximum index for an action (from 0 up to the action space).
         """
         self.Qvalues = defaultdict(int)
-        self.action_space = action_space
+        self.action_space = action_space    # Number of actions
         self.iterations = 0         # This is used to count how many iteration until convergence
         # this last part differentiates between temporal-difference based algorithm and Monte Carlo based (the function learining changes a bit)
         if self.single_step_update.__func__ is not RLAlgorithm.single_step_update:   #single_step_update was overridden

@@ -112,13 +112,12 @@ class RLAlgorithm:
         """
         pass
 
-    def get_action_during_learning(self, s, eps, possible_actions=None):
+    def get_action_during_learning(self, s, possible_actions=None):
         """
             Chooses action depending on the current policy used during learning
         """
         pass
         
-
     def get_action_during_evaluation(self, s, possible_action = None):
         """
             Chooses action depending on the policy used during final evaluation
@@ -153,7 +152,7 @@ class RLAlgorithm:
 
         for i in range(n_episodes):
 
-            eps = epsilon_schedule.decay() # it decays over episodes
+            self.eps = epsilon_schedule.decay() # it decays over episodes
 
             done = False
             keep = True
@@ -161,7 +160,7 @@ class RLAlgorithm:
             env.reset()
             state = bracketer.bracket(env._get_obs())
             
-            action = self.get_action_during_learning(state, eps = eps)
+            action = self.get_action_during_learning(state)
 
             episode = []
 
@@ -178,7 +177,7 @@ class RLAlgorithm:
                 episode.append((state, action, reward))
 
                 possible_actions = env.get_possible_actions(action)
-                new_a = self.get_action_during_learning(new_s, eps, possible_actions=possible_actions)
+                new_a = self.get_action_during_learning(new_s, possible_actions=possible_actions)
 
                 if self.update_at == "step":
                     self.single_step_update(state, action, reward, new_s, new_a, done)
@@ -193,7 +192,7 @@ class RLAlgorithm:
 
             if i % 100 == 0:
                 clear_output(wait=False)
-                print(f"Episode {i}/{n_episodes} : epsilon {eps}")
+                print(f"Episode {i}/{n_episodes} : epsilon {self.eps}")
 
 
         print("\n\nLearning finished\n\n")
@@ -248,7 +247,7 @@ class Montecarlo(RLAlgorithm):
         self.lr_v = lr_v
         self.returns = defaultdict(list)  # To store returns for each state-action pair
 
-    def get_action_during_learning(self, s, eps, possible_actions=None):
+    def get_action_during_learning(self, s, possible_actions=None):
         
         #   Chooses action at random using an epsilon-greedy policy wrt the current Q(s,a).
         #   It also automatically complete the dictionary for the state with all possible actions.
@@ -256,7 +255,7 @@ class Montecarlo(RLAlgorithm):
         complete_subkey(self.Qvalues, s, default=[i for i in range (self.action_space)])
         ran = np.random.rand()
         
-        if (ran < eps):
+        if (ran < self.eps):
             prob_actions = np.ones(self.action_space)/self.action_space
         else:
             prob_actions = np.zeros(self.action_space)
@@ -299,7 +298,7 @@ class SARSA(RLAlgorithm):
         # the learning rate
         self.lr_v = lr_v
 
-    def get_action_during_learning(self, s, eps, possible_actions=None):
+    def get_action_during_learning(self, s, possible_actions=None):
         
         #   Chooses action at random using an epsilon-greedy policy wrt the current Q(s,a).
         #   It also automatically complete the dictionary for the state with all possible actions.
@@ -307,7 +306,7 @@ class SARSA(RLAlgorithm):
         complete_subkey(self.Qvalues, s, default=[i for i in range (self.action_space)])
         ran = np.random.rand()
         
-        if (ran < eps):
+        if (ran < self.eps):
             prob_actions = np.ones(self.action_space)/self.action_space
         else:
             prob_actions = np.zeros(self.action_space)
@@ -316,6 +315,7 @@ class SARSA(RLAlgorithm):
         # take one action from the array of actions with the probabilities as defined above.
         a = np.random.choice(self.action_space, p=prob_actions)
         return a 
+
     
     def get_action_during_evaluation(self, s, possible_action = None):
         #   Return the action from the greedy policy.
@@ -357,7 +357,7 @@ class SARSALambda(RLAlgorithm):
         # eligibility traces
         self.e = Eligibility(lambda_value, gamma)
 
-    def get_action_during_learning(self, s, eps, possible_actions=None):
+    def get_action_during_learning(self, s, possible_actions=None):
         
         #   Chooses action at random using an epsilon-greedy policy wrt the current Q(s,a).
         #   It also automatically complete the dictionary for the state with all possible actions.
@@ -365,7 +365,7 @@ class SARSALambda(RLAlgorithm):
         complete_subkey(self.Qvalues, s, default=[i for i in range (self.action_space)])
         ran = np.random.rand()
         
-        if (ran < eps):
+        if (ran < self.eps):
             prob_actions = np.ones(self.action_space)/self.action_space
         else:
             prob_actions = np.zeros(self.action_space)
@@ -374,6 +374,7 @@ class SARSALambda(RLAlgorithm):
         # take one action from the array of actions with the probabilities as defined above.
         a = np.random.choice(self.action_space, p=prob_actions)
         return a 
+
 
     def get_action_during_evaluation(self, s, possible_action = None):
         #   Return the action from the greedy policy.
@@ -413,7 +414,7 @@ class QLearning(RLAlgorithm):
         # the learning rate
         self.lr_v = lr_v
     
-    def get_action_during_learning(self, s, eps, possible_actions=None):
+    def get_action_during_learning(self, s, possible_actions=None):
         
         #   Chooses action at random using an epsilon-greedy policy wrt the current Q(s,a).
         #   It also automatically complete the dictionary for the state with all possible actions.
@@ -421,7 +422,7 @@ class QLearning(RLAlgorithm):
         complete_subkey(self.Qvalues, s, default=[i for i in range (self.action_space)])
         ran = np.random.rand()
         
-        if (ran < eps):
+        if (ran < self.eps):
             prob_actions = np.ones(self.action_space)/self.action_space
         else:
             prob_actions = np.zeros(self.action_space)
@@ -488,8 +489,8 @@ class DeepDoubleQLearning(RLAlgorithm):
         self.dqn_target.eval()
 
 
-    def get_action_during_learning(self, state, eps, possible_actions=None):
-        if np.random.rand() < eps: # Explore
+    def get_action_during_learning(self, state, possible_actions=None):
+        if np.random.rand() < self.eps: # Explore
             if possible_actions is None:
                 possible_actions = list(range(self.action_space))
             return np.random.choice(possible_actions)
@@ -602,7 +603,7 @@ class AtariDQN(DeepDoubleQLearning):
 
         self.optimizer = torch.optim.Adam(self.dqn_online.parameters(), lr=self.lr_v)
 
-    def get_action_during_learning(self, s, eps, possible_actions=None):
+    def get_action_during_learning(self, s, possible_actions=None):
         
         #   Chooses action at random using an epsilon-greedy policy wrt the current Q(s,a).
         #   It also automatically complete the dictionary for the state with all possible actions.
@@ -610,7 +611,7 @@ class AtariDQN(DeepDoubleQLearning):
         complete_subkey(self.Qvalues, s, default=[i for i in range (self.action_space)])
         ran = np.random.rand()
         
-        if (ran < eps):
+        if (ran < self.eps):
             prob_actions = np.ones(self.action_space)/self.action_space
         else:
             prob_actions = np.zeros(self.action_space)

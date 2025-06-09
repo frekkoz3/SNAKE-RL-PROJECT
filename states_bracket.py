@@ -83,8 +83,8 @@ class StateBracket():
 
     def bracket(self, state):
         """
-            Input : generic state
-            Output : some feature of the state representing the bracket containing the state
+            Input : generic state (as a np.array)
+            Output : some feature of the state representing the bracket containing the state (this must be a tuple for its use in a dictonary)
         """
         pass
 

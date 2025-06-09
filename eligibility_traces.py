@@ -25,10 +25,15 @@ class Eligibility:
         """
             state_action here is in the usual format (*state, action)
         """
-        self.traces[state_action] += 1.0
+        # if state_action is not in self.traces, it will be initialized to 0.0
+        if state_action not in self.traces:
+            self.traces[state_action] = 0.0
+        else :
+            self.traces[state_action] += 1.0
+
 
     def decay(self):
-        self.traces *= self.gamma * self.lambda_value
+        self.traces = {k: v * self.gamma * self.lambda_value for k, v in self.traces.items()}
 
 
 

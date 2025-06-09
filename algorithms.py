@@ -91,7 +91,7 @@ class RLAlgorithm:
         self.Qvalues = defaultdict(int)
         self.action_space = action_space    # Number of actions
         self.iterations = 0         # This is used to count how many iteration until convergence
-        # this last part differentiates between temporal-difference based algorithm and Monte Carlo based (the function learining changes a bit)
+        # this last part differentiates between temporal-difference based algorithm and Monte Carlo based (the function learning changes a bit)
         if self.single_step_update.__func__ is not RLAlgorithm.single_step_update:   #single_step_update was overridden
             self.update_at = "step"
         elif self.single_episode_update.__func__ is not RLAlgorithm.single_episode_update:   #single_episode_update was overidden
@@ -350,7 +350,7 @@ class SARSA(RLAlgorithm):
 
 class SARSALambda(RLAlgorithm):
 
-    def __init__(self, lambda_value, action_space, gamma=1, lr_v=0.01):
+    def __init__(self, action_space, gamma=1, lr_v=0.01, lambda_value=0.9):
         super().__init__(action_space)
         # the discount factor
         self.gamma = gamma
@@ -380,7 +380,7 @@ class SARSALambda(RLAlgorithm):
 
     def get_action_during_evaluation(self, s, possible_action = None):
         #   Return the action from the greedy policy.
-        #  If there are no possible action it firstly complete the subkey and then excract one action.
+        #  If there are no possible action it firstly complete the subkey and then extract one action.
         
         if possible_action is None:
             complete_subkey(self.Qvalues, s, default=[i for i in range (self.action_space)])

@@ -200,7 +200,7 @@ class RLAlgorithm:
         print("\n\nLearning finished\n\n")
         for i in range(len(performance_traj)):
             if i % 100 == 0 and i != 0:
-                print(f"Episode {i} : Average performance {np.mean(performance_traj[i-100:i]}")
+                print(f"Episode {i} : Average performance {np.mean(performance_traj[i-100:i])}")
         env.close()
 
     def play(self, env, bracketer):

@@ -145,6 +145,8 @@ class RLAlgorithm:
             self.Qvalues = pickle.load(f)
 
     def learning(self, env, epsilon_schedule, n_episodes, bracketer):
+        if epsilon_schedule is None:        #if epsilon is not used, e.g. for policy gradient
+            epsilon_schedule = Epsilon(0)
         
         performance_traj = np.zeros(n_episodes)
 

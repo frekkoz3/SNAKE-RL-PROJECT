@@ -391,7 +391,7 @@ class NeighPlusFoodDirectionPlusTailBracket(StateBracket):
                     fx = j
                     fy = i
 
-        return (tail, int(hy < fy), int(hx < fx), int(hy > fy), int(hx > fx), *self.neigh(grid, [hy, hx], self.radius))
+        return tail, int(hy < fy), int(hx < fx), int(hy > fy), int(hx > fx), *self.neigh(grid, [hy, hx], self.radius)
     
     def __str__(self):
         return f"{self.neigh_name}{self.radius} FRP T"
@@ -400,6 +400,35 @@ class NeighPlusFoodDirectionPlusTailBracket(StateBracket):
         if self.neigh_name == "M":
             return (2*self.radius + 1)*(2*self.radius + 1) + 4 + 1
         return self.radius*self.radius + (self.radius + 1)*(self.radius + 1) + 4 + 1
+
+
+class FullGrid(StateBracket):
+
+    def __init__(self, height, width):
+        if width != height:
+            raise ValueError("The grid must be square, width must be equal to height.")
+
+        super().__init__()
+        self.width = width
+        self.height = height
+
+    def bracket(self, state):
+        """
+            Input : generic state
+            Output : the full grid as a tuple of tuples, where each inner tuple represents a row in the grid.
+        """
+        if state.shape != (self.height, self.width):
+            raise ValueError(f"State must be of shape ({self.height}, {self.width}).")
+
+        return tuple(tuple(row) for row in state)
+
+    def get_state_dim(self):
+        """
+            Returns the dimension of the state space.
+            In this case, the full grid is represented as a tuple of tuples.
+        """
+        return self.height * self.width
+
     
 if __name__ == "__main__":
     grid = np.array(
@@ -409,6 +438,8 @@ if __name__ == "__main__":
             [0, 0, 0, 3, 3, 0, 3, 0],
             [0, 0, 0, 0, 3, 0, 3, 0],
             [0, 0, 0, 0, 2, 0, 3, 0],
-            [0, 0, 0, 0, 0, 0, 3, 0]])
-    pos = [0, 0]
-    print(von_neumann_neigh(grid, pos, 1))
+            [0, 0, 0, 0, 0, 0, 3, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0]])
+
+    bracketer = FullGrid(8, 8)
+    print(bracketer.bracket(grid))

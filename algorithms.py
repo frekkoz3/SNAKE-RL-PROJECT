@@ -45,8 +45,20 @@ class ConvolutionalDQN(nn.Module):
             nn.ReLU(),
             nn.Conv2d(64, 32, kernel_size=3, stride=1),
             nn.ReLU(),
+        )
+
+        with torch.no_grad():
+            dummy_input = torch.zeros(1, n_layers, height, width)
+            # Pass it through the convolutional layers
+            cnn_output = self.layers(dummy_input)
+            # Get the size of the flattened output
+            flattened_size = cnn_output.flatten(1).shape[1]
+
+        # --- Define the fully-connected part using the correct size ---
+        self.fc_layers = nn.Sequential(
             nn.Flatten(),
-            nn.Linear(32 * ((height - 3) // 2) * ((width - 3) // 2), 32),
+            nn.Linear(flattened_size, 32), # Use the calculated size
+            nn.ReLU(),
             nn.Linear(32, action_dim)
         )
 
@@ -56,6 +68,7 @@ class ConvolutionalDQN(nn.Module):
         x is expected to be of shape (batch_size, state_dim, height, width)
         """
         x = self.layers(x)
+        x = self.fc_layers(x)
         return x
 
 
@@ -192,9 +205,9 @@ class RLAlgorithm:
             if self.update_at == "episode":
                 self.single_episode_update(episode)
 
-            if i % 100 == 0:
+            if i % 1 == 0:
                 clear_output(wait=False)
-                print(f"Episode {i}/{n_episodes} : epsilon {self.eps}")
+                print(f"Episode {i}/{n_episodes} : epsilon {self.eps:.4f}")
 
 
         print("\n\nLearning finished\n\n")
@@ -586,96 +599,94 @@ class DeepDoubleQLearning(RLAlgorithm):
         self.dqn_target.eval()
 
 
-class AtariDQN(DeepDoubleQLearning):
+class AtariDeepQLearning(DeepDoubleQLearning):
     """
     This class implements the DDQL using an Atari-like structure
     It uses convolutional layers to process the input state.
     """
 
     def __init__(self, action_space, gamma, lr_v, n_layers, height, width, batch_size=32, memory_size=10000, target_update_freq=1000, device='cpu'):
+
         super().__init__(action_space, gamma, lr_v, n_layers*height*width, batch_size, memory_size, target_update_freq, device)
 
         self.n_layers = n_layers
         self.recent_history = deque(maxlen=n_layers)
 
-        self.dqn_online = ConvolutionalDQN(action_dim=action_space, n_layers=n_layers, height=height, width=width).to(self.device)
-        self.dqn_target = ConvolutionalDQN(action_dim=action_space, n_layers=n_layers, height=height, width=width).to(self.device)
-        self.dqn_target.load_state_dict(self.dqn_online.state_dict())
-        self.dqn_target.eval()
+        self.atari_online = ConvolutionalDQN(action_dim=action_space, n_layers=n_layers, height=height, width=width).to(self.device)
+        self.atari_target = ConvolutionalDQN(action_dim=action_space, n_layers=n_layers, height=height, width=width).to(self.device)
+        self.atari_target.load_state_dict(self.atari_online.state_dict())
 
-        self.optimizer = torch.optim.Adam(self.dqn_online.parameters(), lr=self.lr_v)
+        self.atari_online.train()
+        self.atari_target.eval()
 
-    def get_action_during_learning(self, s, possible_actions=None):
-        
-        #   Chooses action at random using an epsilon-greedy policy wrt the current Q(s,a).
-        #   It also automatically complete the dictionary for the state with all possible actions.
-       
-        complete_subkey(self.Qvalues, s, default=[i for i in range (self.action_space)])
-        ran = np.random.rand()
-        
-        if (ran < self.eps):
-            prob_actions = np.ones(self.action_space)/self.action_space
-        else:
-            prob_actions = np.zeros(self.action_space)
-            prob_actions[argmax_over_dict_given_subkey(self.Qvalues, (*s, ), default=[i for i in range (self.action_space)])[-1]] = 1
-            
-        # take one action from the array of actions with the probabilities as defined above.
-        a = np.random.choice(self.action_space, p=prob_actions)
-        return a 
+        self.optimizer = torch.optim.Adam(self.atari_online.parameters(), lr=self.lr_v)
 
-    def get_action_during_evaluation(self, s, possible_action = None):
-        #   Return the action from the greedy policy.
-        #  If there are no possible action it firstly complete the subkey and then excract one action.
-        
-        if possible_action is None:
-            complete_subkey(self.Qvalues, s, default=[i for i in range (self.action_space)])
-            a = argmax_over_dict_given_subkey(self.Qvalues, (*s, ), default=[i for i in range (self.action_space)])[-1]
-        else:
-            a = argmax_over_dict_given_subkey_and_possible_action(self.Qvalues, (*s, ), possible_action, default=[i for i in range (self.action_space)])[-1]
-        return a
+
+    def get_action_during_learning(self, state, possible_actions=None):
+            if np.random.rand() < self.eps: # Esplorazione
+                if possible_actions is None:
+                    possible_actions = list(range(self.action_space))
+                return np.random.choice(possible_actions)
+
+            else: # Sfruttamento
+                if possible_actions is None:
+                    possible_actions = list(range(self.action_space))
+
+                s_tensor = torch.tensor(state, dtype=torch.float32, device=self.device).unsqueeze(0).unsqueeze(0)
+
+                with torch.no_grad():
+                    q_values_all = self.atari_online(s_tensor)[0]
+                    # Seleziona l'azione migliore tra quelle possibili
+                    q_values_subset = q_values_all[possible_actions]
+                    best_action_idx_in_subset = q_values_subset.argmax().item()
+                    return possible_actions[best_action_idx_in_subset]
+
+
+    def get_action_during_evaluation(self, state, possible_actions=None):
+        # Aggiungi le dimensioni batch e canali
+        s_tensor = torch.tensor(state, dtype=torch.float32, device=self.device).unsqueeze(0).unsqueeze(0)
+
+        with torch.no_grad():
+            qvals = self.atari_target(s_tensor)
+
+        best = qvals.argmax(dim=1).item()
+
+        if possible_actions is None or best in possible_actions:
+            return best
+
+        # Se l'azione migliore non è possibile, scegli la migliore tra quelle consentite
+        sub_q = qvals[0, possible_actions]
+        return possible_actions[sub_q.argmax().item()]
+
 
     def single_step_update(self, s, a, r, new_s, new_a, done):
         """
         TODO: è DA SISTEMARE UN PO' QUESTO METODO.
         """
-
-        # Update the recent history
-        self.recent_history.append((s, a, r, new_s, done))
-
-        # if the recent history is full, add to the memory
-        if len(self.recent_history) == self.n_layers:
-            # Convert the recent history to a state
-            state = np.array([self.recent_history[i][0] for i in range(self.n_layers)])
-            action = self.recent_history[-1][1]
-            reward = self.recent_history[-1][2]
-            new_state = np.array([self.recent_history[i][3] for i in range(self.n_layers)])
-            done = self.recent_history[-1][4]
-
-            # Store the transition in memory
-            self.memory.append((state, action, reward, new_state, done))
+        self.memory.append((s, a, r, new_s, done))
 
         if len(self.memory) < 2*self.batch_size:
             return
 
         states, actions, rewards, next_states, dones = self.memory.sample()
 
-        states = torch.tensor(states, dtype=torch.float32, device=self.device)
+        states = torch.tensor(states, dtype=torch.float32, device=self.device).unsqueeze(1)
         actions = torch.tensor(actions, dtype=torch.int64, device=self.device).unsqueeze(1)
         rewards = torch.tensor(rewards, dtype=torch.float32, device=self.device)
-        next_states = torch.tensor(next_states, dtype=torch.float32, device=self.device)
+        next_states = torch.tensor(next_states, dtype=torch.float32, device=self.device).unsqueeze(1)
         dones = torch.tensor(dones, dtype=torch.float32, device=self.device)
 
         # Compute Q-values for the current states using the ONLINE DQN
-        current_q_values = self.dqn_online(states).gather(1, actions).squeeze(1)
+        current_q_values = self.atari_online(states).gather(1, actions).squeeze(1)
 
-        next_actions = self.dqn_online(next_states).argmax(1, keepdim=True)
+        next_actions = self.atari_online(next_states).argmax(1, keepdim=True)
 
 
         # Compute Q-values for the next states using the TARGET DQN
         with torch.no_grad():
             # Get the best action given the next states using the ONLINE DQN
             # Compute the Q-values for the next states using the TARGET DQN
-            next_q_values = self.dqn_target(next_states).gather(1, next_actions).squeeze(1)
+            next_q_values = self.atari_target(next_states).gather(1, next_actions).squeeze(1)
 
             # Compute the expected q_values
             target_q_values = rewards + self.gamma * next_q_values * (1 - dones)
@@ -690,10 +701,25 @@ class AtariDQN(DeepDoubleQLearning):
 
         # Update the target DQN every `self.target_update_freq` iterations
         if self.iterations % self.target_update_freq == 0:
-            self.dqn_target.load_state_dict(self.dqn_online.state_dict())
+            self.atari_target.load_state_dict(self.atari_online.state_dict())
 
         # Increment the iteration counter
         self.iterations += 1
+
+
+    def name(self):
+        return "AtariDQL"
+
+
+    def save(self, path):
+        super().save(path)
+        torch.save(self.atari_target.state_dict(), path)
+
+
+    def upload(self, path):
+        self.atari_target.load_state_dict(torch.load(path))
+        self.atari_target.eval()
+
 
 if __name__ == "__main__":
     

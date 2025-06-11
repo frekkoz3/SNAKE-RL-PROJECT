@@ -12,3 +12,5 @@ Ho provato vari binning e lascio qui i risultati:
      Il problema è che come la coda si allunga lui perde ciò che aveva imparato. Quindi serve un training più lungo
   4) FALLITO
      Ho dato solo le 4 direzioni cardinali, invece anche di quelle intermedie(NE, SW, ...) e non so perchè ma non impara nulla. Credo non sono         abbastanza informazioni
+  5) FALLITO
+     Ho provato a dargli anche la direzione in cui sta andando, ma serve solo quando non ha una coda. Quando ha una coda lui impara comunque a         non andare "in retro" perchè in quella direzione vede un blocco 

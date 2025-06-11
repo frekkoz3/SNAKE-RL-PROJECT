@@ -706,6 +706,330 @@ class AtariDeepQLearning(DeepDoubleQLearning):
         # Increment the iteration counter
         self.iterations += 1
 
+    class PolicyGradient(RLAlgorithm):
+
+    def __init__(self, action_space, gamma, lr_a):
+        super().__init__(action_space)
+
+        self.gamma = gamma
+        self.lr_a = lr_a
+        
+        self.parameters = defaultdict(float)
+
+    def policy(self, action, state):
+
+        complete_subkey(dictionary=self.parameters, sub_key=state, default=[i for i in range (self.action_space)])
+
+        return np.exp(self.parameters[(*state, action)])  /  sum(  np.exp(self.parameters[(*state, a)])  for a in range(self.action_space)  )
+
+    def get_action_during_learning(self, state, possible_actions=None):     
+        #policy(a | s) = p(A = a|S = s) = softmax(parameters) = exp( parameters[(*s, a)] )  /  (normaliz. factor over actions)
+
+        complete_subkey(dictionary=self.parameters, sub_key=state, default=[i for i in range (self.action_space)])
+    
+        prob_a = np.zeros(self.action_space)
+
+        for a in range(self.action_space):
+            prob_a[a] = np.exp(self.parameters[(*state, a)])  /  sum(  np.exp(self.parameters[(*state, ap)])  for ap in range(self.action_space)  )  
+        
+        chosen_action = np.random.choice(range(self.action_space), p=prob_a)
+        return chosen_action
+        
+    def get_action_during_evaluation(self, state, possible_actions=None):
+        return self.get_action_during_learning(state, possible_actions=possible_actions)
+
+    def save(self, path):
+        with open(f"{path}.pkl", 'wb') as f:
+            pickle.dump(self.parameters, f)
+    
+    def upload(self, path):
+        with open(f"{path}.pkl", 'rb') as f:
+            self.parameters = pickle.load(f)
+
+class ActorOnly(PolicyGradient):
+
+    def single_episode_update(self, episode):
+        # After the episode ends, we update the policy
+        # The policy is parametriced via soft-max, and theta is a vector with entries for every couple bin-action
+        G = 0
+        for state, action, reward in reversed(episode):
+            G = reward + self.gamma * G
+            
+
+            complete_subkey(dictionary=self.parameters, sub_key=state, default=[i for i in range (self.action_space)])
+
+            # Update the parameters
+            for a in range(self.action_space):
+                if a == action:  #for the performed action
+                    self.parameters[(*state, a)] += self.lr_a*G*(1-self.policy(action, state))
+                else:
+                    self.parameters[(*state, a)] += self.lr_a*G*( -self.policy(action, state))
+
+            #for numerical stability, we subtract from the parameters their max value
+            max_parameter = np.mean( [self.parameters[(*state, a)]   for a in range(self.action_space)])
+            for a in range(self.action_space):
+                self.parameters[(*state, a)] -= float(max_parameter)
+
+class ActorCritic(PolicyGradient):
+
+    def __init__(self, action_space, gamma, lr_a, lr_v):
+        super().__init__(action_space, gamma, lr_a)
+
+        self.lr_v = lr_v
+        self.value = defaultdict(float)
+
+    def single_step_update(self, s, a, r, new_s, new_a, done):
+        # After the episode ends, we update the value and the policy
+        # The policy is parametriced via soft-max, and theta is a vector with entries for every couple bin-action
+
+        # critic update
+        if done:   
+            delta = r + 0 - self.value[s]
+        else:
+            delta = r + self.gamma*self.value[new_s]    -    self.value[s]
+
+        self.value[s] += self.lr_v*delta
+
+        # actor update (parameters)
+
+        #complete_subkey(dictionary=self.parameters, sub_key=s, default=[i for i in range (self.action_space)])
+        
+        for ap in range(self.action_space):
+            if ap == a:  #for the performed action
+                self.parameters[(*s, ap)] += self.lr_a*delta*(1-self.policy(a, s))
+            else:
+                self.parameters[(*s, ap)] += self.lr_a*delta*( -self.policy(a, s))
+
+        # For numerical stability, we subtract from the parameters their max value
+        max_parameter = np.max( [self.parameters[(*s, ap)]   for ap in range(self.action_space)])
+        for ap in range(self.action_space):
+            self.parameters[(*s, ap)] -= float(max_parameter)
+
+    def learning(self, env, epsilon_schedule, n_episodes, bracketer):
+        
+        performance_traj = np.zeros(n_episodes)
+
+        state, _ = env.reset()
+
+        for i in range(n_episodes):
+            
+            if epsilon_schedule is not None:    #only if epsilon is used
+                self.eps = epsilon_schedule.decay() # it decays over episodes
+
+            done = False
+            keep = True
+
+            env.reset()
+            state = bracketer.bracket(env._get_obs())
+            
+            action = self.get_action_during_learning(state)
+
+            episode = []
+
+            while not done and keep:
+
+                new_s, reward, done, trunc, inf = env.step(action)
+
+                if inf != {}:       #if inf is not empty => the action performed is NOT the action intended(it was unfeasible)
+                    action = inf["act"]
+                new_s = bracketer.bracket(new_s)
+                
+                # Keeps track of performance for each episode
+                performance_traj[i] += reward
+
+                episode.append((state, action, reward))
+
+                possible_actions = env.get_possible_actions(action)
+                new_a = self.get_action_during_learning(new_s, possible_actions=possible_actions)
+
+                
+                if self.update_at == "step":
+                    self.single_step_update(state, action, reward, new_s, new_a, done)
+                
+                action = new_a
+                state = new_s
+
+                keep = env.render()
+            
+            if self.update_at == "episode":
+                self.single_episode_update(episode)
+
+            if i % 100 == 0:
+                clear_output(wait=False)
+                if epsilon_schedule is not None:    #only if epsilon is used
+                    print(f"Episode {i}/{n_episodes} : epsilon {self.eps}")
+                else:
+                    print(f"Episode {i}/{n_episodes}")
+
+
+           
+
+        print("\n\nLearning finished\n\n")
+        for i in range(len(performance_traj)):
+            if i % 100 == 0 and i != 0:
+                print(f"Episode {i} : Average performance {np.mean(performance_traj[i-100:i])}")
+
+        print("Final policy: ")
+        for s in self.value:
+            print("food")
+            if s[0] == 1:
+                print("N")
+            if s[1] == 1:
+                print("S")
+            if s[2] == 1:
+                print("O")
+            if s[3] == 1:
+                print("E")
+
+            print("  ", s[4])
+            print(f"{s[5]}     {s[7]}")
+            print("  ", s[8])
+
+            print("    ", f"{self.policy(0, s):.2f}")
+            print(f"{self.policy(2, s):.2f}      {self.policy(3, s):.2f}")
+            print("    ", f"{self.policy(1, s):.2f}")
+            print("-----------------------------------")
+            
+        env.close()
+
+class ActorCriticLambda(PolicyGradient):
+    def __init__(self, action_space, gamma, lr_a, lr_v, Lambda):
+        super().__init__(action_space, gamma, lr_a)
+
+        self.lr_v = lr_v
+        self.value = defaultdict(float)
+        self.Lambda = Lambda
+
+    def single_step_update(self, s, a, r, new_s, new_a, done):
+        # After the episode ends, we update the value and the policy
+        # The policy is parametriced via soft-max, and theta is a vector with entries for every couple bin-action
+
+        # critic update
+        if done:   
+            delta = r + 0 - self.value[s]
+        else:
+            delta = r + self.gamma*self.value[new_s]    -    self.value[s]
+
+        for sp in self.e_value:
+            self.e_value[sp] = self.gamma*self.Lambda*self.e_value[sp]
+
+        self.e_value[s] +=  1
+        
+        for sp in self.e_value:
+            self.value[sp] += self.lr_v*delta*self.e_value[sp]
+
+        # actor update (parameters)
+
+        for s_a in self.e_parameters:
+            self.e_parameters[s_a] = self.gamma*self.Lambda*self.e_parameters[s_a]
+        
+        for ap in range(self.action_space):
+            if ap == a:  #for the performed action
+                self.e_parameters[(*s, ap)] += 1-self.policy(a, s)
+            else:
+                self.e_parameters[(*s, ap)] += -self.policy(a, s)
+
+        for s_a in self.e_parameters:
+            self.parameters[s_a] += self.lr_a*delta*self.e_parameters[s_a]
+
+
+        # For numerical stability, we subtract from the parameters their max value
+        for sp in self.value:
+            max_parameter = np.max( [self.parameters[(*sp, ap)]   for ap in range(self.action_space)])
+            for ap in range(self.action_space):
+                self.parameters[(*sp, ap)] -= float(max_parameter)
+
+    def learning(self, env, epsilon_schedule, n_episodes, bracketer):
+        
+        performance_traj = np.zeros(n_episodes)
+
+        state, _ = env.reset()
+
+        for i in range(n_episodes):
+            
+            if epsilon_schedule is not None:    #only if epsilon is used
+                self.eps = epsilon_schedule.decay() # it decays over episodes
+
+            done = False
+            keep = True
+
+            self.e_parameters = defaultdict(float)
+            self.e_value = defaultdict(float)
+
+            env.reset()
+            state = bracketer.bracket(env._get_obs())
+            
+            action = self.get_action_during_learning(state)
+
+            episode = []
+
+            while not done and keep:
+
+                new_s, reward, done, trunc, inf = env.step(action)
+
+                if inf != {}:       #if inf is not empty => the action performed is NOT the action intended(it was unfeasible)
+                    action = inf["act"]
+                new_s = bracketer.bracket(new_s)
+                
+                # Keeps track of performance for each episode
+                performance_traj[i] += reward
+
+                episode.append((state, action, reward))
+
+                possible_actions = env.get_possible_actions(action)
+                new_a = self.get_action_during_learning(new_s, possible_actions=possible_actions)
+
+                
+                if self.update_at == "step":
+                    self.single_step_update(state, action, reward, new_s, new_a, done)
+                
+                action = new_a
+                state = new_s
+
+                keep = env.render()
+            
+            if self.update_at == "episode":
+                self.single_episode_update(episode)
+            
+
+            if i % 100 == 0:
+                clear_output(wait=False)
+                if epsilon_schedule is not None:    #only if epsilon is used
+                    print(f"Episode {i}/{n_episodes} : epsilon {self.eps}")
+                else:
+                    print(f"Episode {i}/{n_episodes}")
+
+
+           
+
+        print("\n\nLearning finished\n\n")
+        for i in range(len(performance_traj)):
+            if i % 100 == 0 and i != 0:
+                print(f"Episode {i} : Average performance {np.mean(performance_traj[i-100:i])}")
+
+        print("Final policy: ")
+        for s in self.value:
+            print("food")
+            if s[0] == 1:
+                print("N")
+            if s[1] == 1:
+                print("S")
+            if s[2] == 1:
+                print("O")
+            if s[3] == 1:
+                print("E")
+
+            print("  ", s[4])
+            print(f"{s[5]}     {s[7]}")
+            print("  ", s[8])
+
+            print("    ", f"{self.policy(0, s):.2f}")
+            print(f"{self.policy(2, s):.2f}      {self.policy(3, s):.2f}")
+            print("    ", f"{self.policy(1, s):.2f}")
+            print("-----------------------------------")
+            
+        env.close()
+
 
     def name(self):
         return "AtariDQL"

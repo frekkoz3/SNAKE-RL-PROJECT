@@ -706,7 +706,7 @@ class AtariDeepQLearning(DeepDoubleQLearning):
         # Increment the iteration counter
         self.iterations += 1
 
-    class PolicyGradient(RLAlgorithm):
+class PolicyGradient(RLAlgorithm):
 
     def __init__(self, action_space, gamma, lr_a):
         super().__init__(action_space)

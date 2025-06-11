@@ -138,14 +138,14 @@ def get_model_average_score(model_name, action_space, gamma, lr_v, model_path, b
     """
 
     assert num_episodes > 0, "Number of episodes must be greater than 0."
-    model_types = ['DDQN', 'QLearning', 'SARSA', 'MC']
+    model_types = ['DDQL', 'QLearning', 'SARSA', 'MC', 'AtariDQL']
     env = SnakeEnv(render_mode=render_mode)
 
     if model_name not in model_types:
         print(f'Model {model_name} is not supported. Supported models are: {model_types}.\nReturning...')
         return None
 
-    if model_name == 'DDQN':
+    if model_name == 'DDQL':
         if len(kwargs) < 5:
             print('Not enough parameters for Deep Double Q-Learning. Returning...')
             return None
@@ -158,6 +158,21 @@ def get_model_average_score(model_name, action_space, gamma, lr_v, model_path, b
 
         model = alg.DeepDoubleQLearning(action_space=action_space, state_dim=state_dim, gamma=gamma, lr_v=lr_v, batch_size=batch_size,
                                         memory_size=memory_size, target_update_freq=target_update_freq, device=device)
+
+    elif model_name == 'AtariDQL':
+        if len(kwargs) < 6:
+            print('Not enough parameters for Atari-like Deep Double Q-Learning. Returning...')
+            return None
+
+        batch_size = kwargs['batch_size']
+        memory_size = kwargs['memory_size']
+        target_update_freq = kwargs['target_update_freq']
+        device = kwargs['device']
+        width = kwargs['width']
+        height = kwargs['height']
+        n_layers = kwargs['n_layers']
+
+        model = alg.AtariDeepQLearning(action_space=action_space, gamma=gamma, lr_v=lr_v, batch_size=batch_size, memory_size=memory_size, target_update_freq=target_update_freq, device=device, width=width, height=height, n_layers=1)
 
     elif model_name  == 'QLearning':
         model = alg.QLearning(action_space=action_space, gamma=gamma, lr_v=lr_v)

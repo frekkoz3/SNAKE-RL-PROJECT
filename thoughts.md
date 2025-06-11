@@ -10,3 +10,5 @@ Ho provato vari binning e lascio qui i risultati:
      Ho provato VN1 + FP + lunghezza della coda.
      L'idea era che lui cambiasse comportamento con la coda lunga (magari movimenti più ampi per non incastrarsi)
      Il problema è che come la coda si allunga lui perde ciò che aveva imparato. Quindi serve un training più lungo
+  4) FALLITO
+     Ho dato solo le 4 direzioni cardinali, invece anche di quelle intermedie(NE, SW, ...) e non so perchè ma non impara nulla. Credo non sono         abbastanza informazioni

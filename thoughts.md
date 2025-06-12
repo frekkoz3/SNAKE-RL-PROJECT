@@ -16,3 +16,5 @@ Ho provato vari binning e lascio qui i risultati:
      Ho provato a dargli anche la direzione in cui sta andando, ma serve solo quando non ha una coda. Quando ha una coda lui impara comunque a         non andare "in retro" perchè in quella direzione vede un blocco
 
 NB: se non ha la coda si schianta facile. Spiegazione: ipotizziamo abbia il bordo a nord e stava andando a nord. Lui vede semplicemente il nord bloccto, e sceglie di andare a sud. L'azione viene annullata e diventa vai a nord --> si schianta
+
+GAE: se ha tante caselle occupate, l policy rimane random sulle dir libere => impara ad andare a zig zag per non rimanere intrappolato

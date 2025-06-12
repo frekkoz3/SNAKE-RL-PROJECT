@@ -1,13 +1,13 @@
 # TO DO LIST
 
 General:
-1. [ ] To clean up the main
+1. [x] To clean up the main
 2. [x] To implement epsilon class,
 3. [ ] To implement gamma class, 
 4. [x] To implement eligibility trace class 
 5. [x] To improve the DQL
 6. [ ] To implement the Policy Gradient
-7. [ ] To finish `main.py`
+7. [ ] To finish `project.ipynb`
 8. [ ] To implement the Atari-DQN with Convolutional NN and stack of states as input
 9. [ ] Adding why we do not use simple mdp strategies
 

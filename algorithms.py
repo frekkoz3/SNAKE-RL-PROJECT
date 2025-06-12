@@ -294,6 +294,8 @@ class Montecarlo(RLAlgorithm):
     def single_episode_update(self, episode):
         # After the episode ends, we update the Q-values
         G = 0
+        self.returns.clear()
+
         for state, action, reward in reversed(episode):
             G = reward + self.gamma * G
             self.returns[(*state, action)].append(G)
@@ -706,6 +708,7 @@ class AtariDeepQLearning(DeepDoubleQLearning):
         # Increment the iteration counter
         self.iterations += 1
 
+
 class PolicyGradient(RLAlgorithm):
 
     def __init__(self, action_space, gamma, lr_a):
@@ -746,6 +749,7 @@ class PolicyGradient(RLAlgorithm):
         with open(f"{path}.pkl", 'rb') as f:
             self.parameters = pickle.load(f)
 
+
 class ActorOnly(PolicyGradient):
 
     def single_episode_update(self, episode):
@@ -754,7 +758,6 @@ class ActorOnly(PolicyGradient):
         G = 0
         for state, action, reward in reversed(episode):
             G = reward + self.gamma * G
-            
 
             complete_subkey(dictionary=self.parameters, sub_key=state, default=[i for i in range (self.action_space)])
 
@@ -769,6 +772,7 @@ class ActorOnly(PolicyGradient):
             max_parameter = np.mean( [self.parameters[(*state, a)]   for a in range(self.action_space)])
             for a in range(self.action_space):
                 self.parameters[(*state, a)] -= float(max_parameter)
+
 
 class ActorCritic(PolicyGradient):
 
@@ -891,6 +895,7 @@ class ActorCritic(PolicyGradient):
             print("-----------------------------------")
             
         env.close()
+
 
 class ActorCriticLambda(PolicyGradient):
     def __init__(self, action_space, gamma, lr_a, lr_v, Lambda):
@@ -1041,7 +1046,9 @@ class ActorCriticLambda(PolicyGradient):
 
 
     def upload(self, path):
-        self.atari_target.load_state_dict(torch.load(path))
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        device = 'xpu' if torch.xpu.is_available() else device
+        self.atari_target.load_state_dict(torch.load(path, map_location=device))
         self.atari_target.eval()
 
 

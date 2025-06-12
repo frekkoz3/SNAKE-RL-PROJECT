@@ -58,6 +58,19 @@ def von_neumann_neigh(grid, pos, rad):
                 neigh.append(0)
     return neigh
 
+
+def get_object_position(grid, code, width, height):
+    positions = []
+
+    for x in range(width):
+        for y in range(height):
+            if grid[x, y] == code:
+                positions.append((x, y))
+                if code != 3:
+                    break
+
+    return positions
+
 # SUPER CLASS
 class StateBracket():
     """
@@ -429,17 +442,56 @@ class FullGrid(StateBracket):
         """
         return self.height * self.width
 
+
+class FullGridEncoded(StateBracket):
+
+    def __init__(self, height, width):
+        if width != height:
+            raise ValueError("The grid must be square, width must be equal to height.")
+
+        super().__init__()
+        self.width = width
+        self.height = height
+
+
+    def bracket(self, state):
+        if state.shape != (self.height, self.width):
+            raise ValueError(f"State must be of shape ({self.height}, {self.width}).")
+
+        food_position = np.array(get_object_position(state, code=1, width=self.width, height=self.height), ndmin=1)
+        head_position = np.array(get_object_position(state, code=2, width=self.width, height=self.height), ndmin=1)
+        tail_position = np.array(get_object_position(state, code=3, width=self.width, height=self.height), ndmin=1)
+
+        food_grid = np.zeros((self.height, self.width), dtype=int)
+        food_grid[food_position[0, 0], food_position[0, 1]] = 1
+
+        head_grid = np.zeros((self.height, self.width), dtype=int)
+        head_grid[head_position[0, 0], head_position[0, 1]] = 1
+
+        tail_grid = np.zeros((self.height, self.width), dtype=int)
+        for pos in tail_position:
+            tail_grid[pos[0], pos[1]] = 1
+
+        food_grid = food_grid.tolist()
+        head_grid = head_grid.tolist()
+        tail_grid = tail_grid.tolist()
+
+        return (
+            tuple(tuple(row) for row in food_grid),
+            tuple(tuple(row) for row in head_grid),
+            tuple(tuple(row) for row in tail_grid)
+        )
     
 if __name__ == "__main__":
     grid = np.array(
            [[0, 0, 0, 0, 0, 3, 3, 0], 
             [0, 0, 0, 3, 3, 3, 3, 0],
             [0, 0, 0, 3, 0, 0, 3, 0], 
-            [0, 0, 0, 3, 3, 0, 3, 0],
+            [0, 1, 0, 3, 3, 0, 3, 0],
             [0, 0, 0, 0, 3, 0, 3, 0],
             [0, 0, 0, 0, 2, 0, 3, 0],
             [0, 0, 0, 0, 0, 0, 3, 0],
             [0, 0, 0, 0, 0, 0, 0, 0]])
 
-    bracketer = FullGrid(8, 8)
+    bracketer = FullGridEncoded(8, 8)
     print(bracketer.bracket(grid))

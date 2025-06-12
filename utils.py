@@ -172,7 +172,7 @@ def get_model_average_score(model_name, action_space, gamma, lr_v, model_path, b
         height = kwargs['height']
         n_layers = kwargs['n_layers']
 
-        model = alg.AtariDeepQLearning(action_space=action_space, gamma=gamma, lr_v=lr_v, batch_size=batch_size, memory_size=memory_size, target_update_freq=target_update_freq, device=device, width=width, height=height, n_layers=1)
+        model = alg.AtariDeepQLearning(action_space=action_space, gamma=gamma, lr_v=lr_v, batch_size=batch_size, memory_size=memory_size, target_update_freq=target_update_freq, device=device, width=width, height=height, n_layers=n_layers)
 
     elif model_name  == 'QLearning':
         model = alg.QLearning(action_space=action_space, gamma=gamma, lr_v=lr_v)
@@ -185,8 +185,8 @@ def get_model_average_score(model_name, action_space, gamma, lr_v, model_path, b
 
     try:
         model.upload(model_path)
-    except Exception:
-        print(f'Error uploading model {model_name}. Returning...')
+    except Exception as e:
+        print(f'Error uploading model {model_name}. Exception {e}. Returning...')
         return None
 
     total_rewards = 0

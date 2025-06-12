@@ -917,9 +917,9 @@ class GAE(PolicyGradient):
     def single_episode_update(self, episode):
         # After the episode ends, we update the policy
         # The policy is parametriced via soft-max, and theta is a vector with entries for every couple bin-action
-        A = 0
         
-        #print("-----------------BEGIN EPISODE ------------------------------    ")
+        A = 0
+    
         for t in range(len(episode) -1, -1, -1):
             
             state, action, reward = episode[t]
@@ -933,29 +933,25 @@ class GAE(PolicyGradient):
                 delta = reward - self.value[state]
 
             A = delta + self.gamma*self.Lambda*A
-            #if t != len(episode) -1:
-                #print(f"time: {t} v[s] = {self.value[state]} v[s'] = {self.value[next_state]} r = {reward}  d = {delta}  A = {A}")
-            #else:
-                #print(f"time: {t} v[s] = {self.value[state]} r = {reward}  d = {delta}  A = {A}")
+            
             #update the value
 
             self.value[state] += self.lr_v*A
 
             # Update the parameters
-            #print("------------param before------------")
+            
             for a in range(self.action_space):
                 if a == action:  #for the performed action
                     self.parameters[(*state, a)] += self.lr_a*A*(1-self.policy(action, state))
                 else:
                     self.parameters[(*state, a)] += self.lr_a*A*( -self.policy(action, state))
-                #print(self.parameters[(*state, a)])
+                
 
             #for numerical stability, we subtract from the parameters their max value
-            #print("----------------par after----------------")
+            
             max_parameter = np.max( [self.parameters[(*state, a)]   for a in range(self.action_space)])
             for a in range(self.action_space):
                 self.parameters[(*state, a)] -= float(max_parameter)
-                #print(self.parameters[(*state, a)])
         
         
 

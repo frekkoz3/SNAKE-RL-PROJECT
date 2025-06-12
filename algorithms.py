@@ -97,7 +97,7 @@ class RLAlgorithm:
         signal.signal(signal.SIGINT, self.handle_sigint)        # for printing data at premature exit
         
     def handle_sigint(self, signum, frame):
-        
+
         self.print_results_learning()
         sys.exit(0)
 
@@ -246,7 +246,12 @@ class RLAlgorithm:
         for i in range(len(self.performance_traj)):
             if i % 100 == 0 and i != 0:
                 print(f"Episode {i} : Average performance {np.mean(self.performance_traj[i-100:i])}")
-        pass
+        
+        n_moving_average = 60
+        average_performance = np.convolve(self.performance_traj, np.ones(n_moving_average)/n_moving_average, mode='valid')
+        plt.plot(average_performance)
+        plt.title("Performance for episode")
+        plt.show()
 
     def __str__(self):
         return ""
@@ -754,12 +759,6 @@ class PolicyGradient(RLAlgorithm):
     def print_results_learning(self):
 
         super().print_results_learning()
-
-        n_moving_average = 60
-        average_performance = np.convolve(self.performance_traj, np.ones(n_moving_average)/n_moving_average, mode='valid')
-        plt.plot(average_performance)
-        plt.title("Performance for episode")
-        plt.show()
 
         print("Final policy: ")
         for s in self.value:

@@ -916,7 +916,6 @@ class GAE_in_place(PolicyGradient):
         super().__init__(action_space, gamma, lr_a, bracketer)
 
         self.lr_v = lr_v
-        #self.value = defaultdict(float)
         self.value = np.zeros(2**bracketer.get_state_dim())
         self.Lambda = Lambda
 

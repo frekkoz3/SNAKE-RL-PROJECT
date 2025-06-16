@@ -752,8 +752,10 @@ class PolicyGradient(RLAlgorithm):
     def get_action_during_evaluation(self, state, possible_actions=None):
         #no difference from learning for Policy Gradient algorithms
         return self.get_action_during_learning(state, possible_actions=possible_actions)
-           
-    def play_perfect_policy(self, env, bracketer, render_mode="human"):
+    #!!!
+    #use the following function with the bracketer NeighPlusFoodDIrection(neigh="V", radius=1)  
+    #!!!
+    def play_perfect_policy(self, env, bracketer):
         
         done = False
         keep = True

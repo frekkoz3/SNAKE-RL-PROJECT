@@ -792,8 +792,8 @@ class PolicyGradient(RLAlgorithm):
             
             state, reward, done, trunc, inf = env.step(action)
             state = bracketer.bracket(state)
-            if render_mode == "human":
-                keep = env.render()
+            
+            keep = env.render()
 
             total_reward += reward
 

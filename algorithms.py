@@ -605,7 +605,7 @@ class DeepDoubleQLearning(RLAlgorithm):
         self.dqn_target.eval()
 
 
-class AtariDQN(DeepDoubleQLearning):
+class AtariDQL(DeepDoubleQLearning):
     """
     This class implements the DDQL using an Atari-like structure
     It uses convolutional layers to process the input state.

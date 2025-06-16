@@ -7,6 +7,9 @@ import numpy as np
 from collections import defaultdict, deque
 import pickle
 from IPython.display import clear_output
+import matplotlib.pyplot as plt
+import signal
+import sys
 
 import torch
 import torch.nn as nn
@@ -45,20 +48,8 @@ class ConvolutionalDQN(nn.Module):
             nn.ReLU(),
             nn.Conv2d(64, 32, kernel_size=3, stride=1),
             nn.ReLU(),
-        )
-
-        with torch.no_grad():
-            dummy_input = torch.zeros(1, n_layers, height, width)
-            # Pass it through the convolutional layers
-            cnn_output = self.layers(dummy_input)
-            # Get the size of the flattened output
-            flattened_size = cnn_output.flatten(1).shape[1]
-
-        # --- Define the fully-connected part using the correct size ---
-        self.fc_layers = nn.Sequential(
             nn.Flatten(),
-            nn.Linear(flattened_size, 32), # Use the calculated size
-            nn.ReLU(),
+            nn.Linear(32 * ((height - 3) // 2) * ((width - 3) // 2), 32),
             nn.Linear(32, action_dim)
         )
 
@@ -68,7 +59,6 @@ class ConvolutionalDQN(nn.Module):
         x is expected to be of shape (batch_size, state_dim, height, width)
         """
         x = self.layers(x)
-        x = self.fc_layers(x)
         return x
 
 
@@ -102,13 +92,14 @@ class RLAlgorithm:
             The action space is required to be an integer which state the maximum index for an action (from 0 up to the action space).
         """
         self.Qvalues = defaultdict(int)
-        self.action_space = action_space    # Number of actions
+        self.action_space = action_space
         self.iterations = 0         # This is used to count how many iteration until convergence
-        # this last part differentiates between temporal-difference based algorithm and Monte Carlo based (the function learning changes a bit)
-        if self.single_step_update.__func__ is not RLAlgorithm.single_step_update:   #single_step_update was overridden
-            self.update_at = "step"
-        elif self.single_episode_update.__func__ is not RLAlgorithm.single_episode_update:   #single_episode_update was overidden
-            self.update_at = "episode"
+        signal.signal(signal.SIGINT, self.handle_sigint)        # for printing data at premature exit
+        
+    def handle_sigint(self, signum, frame):
+
+        self.print_results_learning()
+        sys.exit(0)
 
     def single_step_update(self, s, a, r, new_s, new_a, done):
         """
@@ -158,22 +149,22 @@ class RLAlgorithm:
             self.Qvalues = pickle.load(f)
 
     def learning(self, env, epsilon_schedule, n_episodes, bracketer):
-        if epsilon_schedule is None:        #if epsilon is not used, e.g. for policy gradient
-            epsilon_schedule = Epsilon(0)
         
-        performance_traj = np.zeros(n_episodes)
+        self.bracketer = bracketer
+        self.performance_traj = np.zeros(n_episodes)
 
         state, _ = env.reset()
 
         for i in range(n_episodes):
-
-            self.eps = epsilon_schedule.decay() # it decays over episodes
+            
+            if epsilon_schedule is not None:    #only if epsilon is used
+                self.eps = epsilon_schedule.decay() # it decays over episodes
 
             done = False
             keep = True
 
             env.reset()
-            state = bracketer.bracket(env._get_obs())
+            state = self.bracketer.bracket(env._get_obs())
             
             action = self.get_action_during_learning(state)
 
@@ -184,17 +175,17 @@ class RLAlgorithm:
                 new_s, reward, done, trunc, inf = env.step(action)
                 if inf != {}:       #if inf is not empty => the action performed is NOT the action intended(it was unfeasible)
                     action = inf["act"]
-                new_s = bracketer.bracket(new_s)
+                new_s = self.bracketer.bracket(new_s)
                 
                 # Keeps track of performance for each episode
-                performance_traj[i] += reward
+                self.performance_traj[i] += reward
 
                 episode.append((state, action, reward))
 
                 possible_actions = env.get_possible_actions(action)
                 new_a = self.get_action_during_learning(new_s, possible_actions=possible_actions)
 
-                if self.update_at == "step":
+                if self.single_step_update.__func__ is not RLAlgorithm.single_step_update:   #single_step_update was overridden
                     self.single_step_update(state, action, reward, new_s, new_a, done)
                 
                 action = new_a
@@ -202,18 +193,18 @@ class RLAlgorithm:
 
                 keep = env.render()
             
-            if self.update_at == "episode":
+            if self.single_episode_update.__func__ is not RLAlgorithm.single_episode_update:   #single_episode_update was overidden
                 self.single_episode_update(episode)
 
-            if i % 1 == 0:
-                clear_output(wait=False)
-                print(f"Episode {i}/{n_episodes} : epsilon {self.eps:.4f}")
-
-
-        print("\n\nLearning finished\n\n")
-        for i in range(len(performance_traj)):
             if i % 100 == 0 and i != 0:
-                print(f"Episode {i} : Average performance {np.mean(performance_traj[i-100:i])}")
+                clear_output(wait=False)
+                if epsilon_schedule is not None:    #only if epsilon is used
+                    print(f"Episode {i}/{n_episodes} : epsilon {self.eps} : Average performance {np.mean(self.performance_traj[i-100:i])}")
+                else:
+                    print(f"Episode {i}/{n_episodes} : Average performance {np.mean(self.performance_traj[i-100:i])}")
+        
+        self.print_results_learning()
+
         env.close()
 
     def play(self, env, bracketer):
@@ -246,7 +237,22 @@ class RLAlgorithm:
         """
         print("\033[93m[WARNING] This method is deprecated and does not actually works as it should.\033[0m")
         print(str(self.Qvalues))
+
+    def print_results_learning(self):
+        """
+            At the and of learining, this function is executed. Print here information on learining
+        """
+        print("\n\nLearning finished\n\n")
+        for i in range(len(self.performance_traj)):
+            if i % 100 == 0 and i != 0:
+                print(f"Episode {i} : Average performance {np.mean(self.performance_traj[i-100:i])}")
         
+        n_moving_average = 60
+        average_performance = np.convolve(self.performance_traj, np.ones(n_moving_average)/n_moving_average, mode='valid')
+        plt.plot(average_performance)
+        plt.title("Performance for episode")
+        plt.show()
+
     def __str__(self):
         return ""
 
@@ -294,6 +300,7 @@ class Montecarlo(RLAlgorithm):
     def single_episode_update(self, episode):
         # After the episode ends, we update the Q-values
         G = 0
+        self.returns.clear()
         for state, action, reward in reversed(episode):
             G = reward + self.gamma * G
             self.returns[(*state, action)].append(G)
@@ -363,7 +370,7 @@ class SARSA(RLAlgorithm):
 
 class SARSALambda(RLAlgorithm):
 
-    def __init__(self, action_space, gamma=1, lr_v=0.01, lambda_value=0.9):
+    def __init__(self, lambda_value, action_space, gamma=1, lr_v=0.01):
         super().__init__(action_space)
         # the discount factor
         self.gamma = gamma
@@ -393,7 +400,7 @@ class SARSALambda(RLAlgorithm):
 
     def get_action_during_evaluation(self, s, possible_action = None):
         #   Return the action from the greedy policy.
-        #  If there are no possible action it firstly complete the subkey and then extract one action.
+        #  If there are no possible action it firstly complete the subkey and then excract one action.
         
         if possible_action is None:
             complete_subkey(self.Qvalues, s, default=[i for i in range (self.action_space)])
@@ -474,7 +481,6 @@ class QLearning(RLAlgorithm):
     
     def name(self):
         return "QLearning"
-
 
 
 class DeepDoubleQLearning(RLAlgorithm):
@@ -599,94 +605,96 @@ class DeepDoubleQLearning(RLAlgorithm):
         self.dqn_target.eval()
 
 
-class AtariDeepQLearning(DeepDoubleQLearning):
+class AtariDQN(DeepDoubleQLearning):
     """
     This class implements the DDQL using an Atari-like structure
     It uses convolutional layers to process the input state.
     """
 
     def __init__(self, action_space, gamma, lr_v, n_layers, height, width, batch_size=32, memory_size=10000, target_update_freq=1000, device='cpu'):
-
         super().__init__(action_space, gamma, lr_v, n_layers*height*width, batch_size, memory_size, target_update_freq, device)
 
         self.n_layers = n_layers
         self.recent_history = deque(maxlen=n_layers)
 
-        self.atari_online = ConvolutionalDQN(action_dim=action_space, n_layers=n_layers, height=height, width=width).to(self.device)
-        self.atari_target = ConvolutionalDQN(action_dim=action_space, n_layers=n_layers, height=height, width=width).to(self.device)
-        self.atari_target.load_state_dict(self.atari_online.state_dict())
+        self.dqn_online = ConvolutionalDQN(action_dim=action_space, n_layers=n_layers, height=height, width=width).to(self.device)
+        self.dqn_target = ConvolutionalDQN(action_dim=action_space, n_layers=n_layers, height=height, width=width).to(self.device)
+        self.dqn_target.load_state_dict(self.dqn_online.state_dict())
+        self.dqn_target.eval()
 
-        self.atari_online.train()
-        self.atari_target.eval()
+        self.optimizer = torch.optim.Adam(self.dqn_online.parameters(), lr=self.lr_v)
 
-        self.optimizer = torch.optim.Adam(self.atari_online.parameters(), lr=self.lr_v)
+    def get_action_during_learning(self, s, possible_actions=None):
+        
+        #   Chooses action at random using an epsilon-greedy policy wrt the current Q(s,a).
+        #   It also automatically complete the dictionary for the state with all possible actions.
+       
+        complete_subkey(self.Qvalues, s, default=[i for i in range (self.action_space)])
+        ran = np.random.rand()
+        
+        if (ran < self.eps):
+            prob_actions = np.ones(self.action_space)/self.action_space
+        else:
+            prob_actions = np.zeros(self.action_space)
+            prob_actions[argmax_over_dict_given_subkey(self.Qvalues, (*s, ), default=[i for i in range (self.action_space)])[-1]] = 1
+            
+        # take one action from the array of actions with the probabilities as defined above.
+        a = np.random.choice(self.action_space, p=prob_actions)
+        return a 
 
-
-    def get_action_during_learning(self, state, possible_actions=None):
-            if np.random.rand() < self.eps: # Esplorazione
-                if possible_actions is None:
-                    possible_actions = list(range(self.action_space))
-                return np.random.choice(possible_actions)
-
-            else: # Sfruttamento
-                if possible_actions is None:
-                    possible_actions = list(range(self.action_space))
-
-                s_tensor = torch.tensor(state, dtype=torch.float32, device=self.device).unsqueeze(0).unsqueeze(0)
-
-                with torch.no_grad():
-                    q_values_all = self.atari_online(s_tensor)[0]
-                    # Seleziona l'azione migliore tra quelle possibili
-                    q_values_subset = q_values_all[possible_actions]
-                    best_action_idx_in_subset = q_values_subset.argmax().item()
-                    return possible_actions[best_action_idx_in_subset]
-
-
-    def get_action_during_evaluation(self, state, possible_actions=None):
-        # Aggiungi le dimensioni batch e canali
-        s_tensor = torch.tensor(state, dtype=torch.float32, device=self.device).unsqueeze(0).unsqueeze(0)
-
-        with torch.no_grad():
-            qvals = self.atari_target(s_tensor)
-
-        best = qvals.argmax(dim=1).item()
-
-        if possible_actions is None or best in possible_actions:
-            return best
-
-        # Se l'azione migliore non è possibile, scegli la migliore tra quelle consentite
-        sub_q = qvals[0, possible_actions]
-        return possible_actions[sub_q.argmax().item()]
-
+    def get_action_during_evaluation(self, s, possible_action = None):
+        #   Return the action from the greedy policy.
+        #  If there are no possible action it firstly complete the subkey and then excract one action.
+        
+        if possible_action is None:
+            complete_subkey(self.Qvalues, s, default=[i for i in range (self.action_space)])
+            a = argmax_over_dict_given_subkey(self.Qvalues, (*s, ), default=[i for i in range (self.action_space)])[-1]
+        else:
+            a = argmax_over_dict_given_subkey_and_possible_action(self.Qvalues, (*s, ), possible_action, default=[i for i in range (self.action_space)])[-1]
+        return a
 
     def single_step_update(self, s, a, r, new_s, new_a, done):
         """
         TODO: è DA SISTEMARE UN PO' QUESTO METODO.
         """
-        self.memory.append((s, a, r, new_s, done))
+
+        # Update the recent history
+        self.recent_history.append((s, a, r, new_s, done))
+
+        # if the recent history is full, add to the memory
+        if len(self.recent_history) == self.n_layers:
+            # Convert the recent history to a state
+            state = np.array([self.recent_history[i][0] for i in range(self.n_layers)])
+            action = self.recent_history[-1][1]
+            reward = self.recent_history[-1][2]
+            new_state = np.array([self.recent_history[i][3] for i in range(self.n_layers)])
+            done = self.recent_history[-1][4]
+
+            # Store the transition in memory
+            self.memory.append((state, action, reward, new_state, done))
 
         if len(self.memory) < 2*self.batch_size:
             return
 
         states, actions, rewards, next_states, dones = self.memory.sample()
 
-        states = torch.tensor(states, dtype=torch.float32, device=self.device).unsqueeze(1)
+        states = torch.tensor(states, dtype=torch.float32, device=self.device)
         actions = torch.tensor(actions, dtype=torch.int64, device=self.device).unsqueeze(1)
         rewards = torch.tensor(rewards, dtype=torch.float32, device=self.device)
-        next_states = torch.tensor(next_states, dtype=torch.float32, device=self.device).unsqueeze(1)
+        next_states = torch.tensor(next_states, dtype=torch.float32, device=self.device)
         dones = torch.tensor(dones, dtype=torch.float32, device=self.device)
 
         # Compute Q-values for the current states using the ONLINE DQN
-        current_q_values = self.atari_online(states).gather(1, actions).squeeze(1)
+        current_q_values = self.dqn_online(states).gather(1, actions).squeeze(1)
 
-        next_actions = self.atari_online(next_states).argmax(1, keepdim=True)
+        next_actions = self.dqn_online(next_states).argmax(1, keepdim=True)
 
 
         # Compute Q-values for the next states using the TARGET DQN
         with torch.no_grad():
             # Get the best action given the next states using the ONLINE DQN
             # Compute the Q-values for the next states using the TARGET DQN
-            next_q_values = self.atari_target(next_states).gather(1, next_actions).squeeze(1)
+            next_q_values = self.dqn_target(next_states).gather(1, next_actions).squeeze(1)
 
             # Compute the expected q_values
             target_q_values = rewards + self.gamma * next_q_values * (1 - dones)
@@ -701,10 +709,12 @@ class AtariDeepQLearning(DeepDoubleQLearning):
 
         # Update the target DQN every `self.target_update_freq` iterations
         if self.iterations % self.target_update_freq == 0:
-            self.atari_target.load_state_dict(self.atari_online.state_dict())
+            self.dqn_target.load_state_dict(self.dqn_online.state_dict())
 
         # Increment the iteration counter
         self.iterations += 1
+
+
 
 class PolicyGradient(RLAlgorithm):
 
@@ -746,6 +756,47 @@ class PolicyGradient(RLAlgorithm):
         with open(f"{path}.pkl", 'rb') as f:
             self.parameters = pickle.load(f)
 
+    def print_results_learning(self):
+
+        super().print_results_learning()
+
+        print("Final policy: ")
+        for s in self.value:
+            print("food")
+            if s[0] == 1:
+                print("N")
+            if s[1] == 1:
+                print("S")
+            if s[2] == 1:
+                print("O")
+            if s[3] == 1:
+                print("E")
+            
+            r = self.bracketer.radius
+            neighb = np.ones((2*r + 1, 2*r + 1))*8
+
+            if self.bracketer.neigh_name == "M":
+                i = 4
+                for row in range(2*r + 1):
+                    for column in range(2*r + 1):
+                        neighb[row, column] = s[i]
+                        i += 1
+            if self.bracketer.neigh_name == "V":
+                i = 4
+                for row in range(2*r + 1):
+                    for column in range(2*r + 1):
+                        if abs(row-r) + abs(column-r) <= r:
+                            neighb[row, column] = s[i]
+                            i += 1
+
+            print("Neighborhood: ")
+            print(neighb.astype(int))
+
+            print("    ", f"{self.policy(0, s):.2f}")
+            print(f"{self.policy(2, s):.2f}      {self.policy(3, s):.2f}")
+            print("    ", f"{self.policy(1, s):.2f}")
+            print("-----------------------------------")
+
 class ActorOnly(PolicyGradient):
 
     def single_episode_update(self, episode):
@@ -754,9 +805,6 @@ class ActorOnly(PolicyGradient):
         G = 0
         for state, action, reward in reversed(episode):
             G = reward + self.gamma * G
-            
-
-            complete_subkey(dictionary=self.parameters, sub_key=state, default=[i for i in range (self.action_space)])
 
             # Update the parameters
             for a in range(self.action_space):
@@ -766,7 +814,7 @@ class ActorOnly(PolicyGradient):
                     self.parameters[(*state, a)] += self.lr_a*G*( -self.policy(action, state))
 
             #for numerical stability, we subtract from the parameters their max value
-            max_parameter = np.mean( [self.parameters[(*state, a)]   for a in range(self.action_space)])
+            max_parameter = np.max( [self.parameters[(*state, a)]   for a in range(self.action_space)])
             for a in range(self.action_space):
                 self.parameters[(*state, a)] -= float(max_parameter)
 
@@ -805,93 +853,6 @@ class ActorCritic(PolicyGradient):
         for ap in range(self.action_space):
             self.parameters[(*s, ap)] -= float(max_parameter)
 
-    def learning(self, env, epsilon_schedule, n_episodes, bracketer):
-        
-        performance_traj = np.zeros(n_episodes)
-
-        state, _ = env.reset()
-
-        for i in range(n_episodes):
-            
-            if epsilon_schedule is not None:    #only if epsilon is used
-                self.eps = epsilon_schedule.decay() # it decays over episodes
-
-            done = False
-            keep = True
-
-            env.reset()
-            state = bracketer.bracket(env._get_obs())
-            
-            action = self.get_action_during_learning(state)
-
-            episode = []
-
-            while not done and keep:
-
-                new_s, reward, done, trunc, inf = env.step(action)
-
-                if inf != {}:       #if inf is not empty => the action performed is NOT the action intended(it was unfeasible)
-                    action = inf["act"]
-                new_s = bracketer.bracket(new_s)
-                
-                # Keeps track of performance for each episode
-                performance_traj[i] += reward
-
-                episode.append((state, action, reward))
-
-                possible_actions = env.get_possible_actions(action)
-                new_a = self.get_action_during_learning(new_s, possible_actions=possible_actions)
-
-                
-                if self.update_at == "step":
-                    self.single_step_update(state, action, reward, new_s, new_a, done)
-                
-                action = new_a
-                state = new_s
-
-                keep = env.render()
-            
-            if self.update_at == "episode":
-                self.single_episode_update(episode)
-
-            if i % 100 == 0:
-                clear_output(wait=False)
-                if epsilon_schedule is not None:    #only if epsilon is used
-                    print(f"Episode {i}/{n_episodes} : epsilon {self.eps}")
-                else:
-                    print(f"Episode {i}/{n_episodes}")
-
-
-           
-
-        print("\n\nLearning finished\n\n")
-        for i in range(len(performance_traj)):
-            if i % 100 == 0 and i != 0:
-                print(f"Episode {i} : Average performance {np.mean(performance_traj[i-100:i])}")
-
-        print("Final policy: ")
-        for s in self.value:
-            print("food")
-            if s[0] == 1:
-                print("N")
-            if s[1] == 1:
-                print("S")
-            if s[2] == 1:
-                print("O")
-            if s[3] == 1:
-                print("E")
-
-            print("  ", s[4])
-            print(f"{s[5]}     {s[7]}")
-            print("  ", s[8])
-
-            print("    ", f"{self.policy(0, s):.2f}")
-            print(f"{self.policy(2, s):.2f}      {self.policy(3, s):.2f}")
-            print("    ", f"{self.policy(1, s):.2f}")
-            print("-----------------------------------")
-            
-        env.close()
-
 class ActorCriticLambda(PolicyGradient):
     def __init__(self, action_space, gamma, lr_a, lr_v, Lambda):
         super().__init__(action_space, gamma, lr_a)
@@ -899,6 +860,8 @@ class ActorCriticLambda(PolicyGradient):
         self.lr_v = lr_v
         self.value = defaultdict(float)
         self.Lambda = Lambda
+        self.e_parameters = defaultdict(float)
+        self.e_value = defaultdict(float)
 
     def single_step_update(self, s, a, r, new_s, new_a, done):
         # After the episode ends, we update the value and the policy
@@ -939,121 +902,73 @@ class ActorCriticLambda(PolicyGradient):
             for ap in range(self.action_space):
                 self.parameters[(*sp, ap)] -= float(max_parameter)
 
-    def learning(self, env, epsilon_schedule, n_episodes, bracketer):
+    def single_episode_update(self, episode):
+
+        self.e_parameters = defaultdict(float)
+        self.e_value = defaultdict(float)
+
+class GAE(PolicyGradient):
+    def __init__(self, action_space, gamma, lr_a, lr_v, Lambda):
+        super().__init__(action_space, gamma, lr_a)
+
+        self.lr_v = lr_v
+        self.value = defaultdict(float)
+        self.Lambda = Lambda
+    def single_episode_update(self, episode):
+        # After the episode ends, we update the policy
+        # The policy is parametriced via soft-max, and theta is a vector with entries for every couple bin-action
+        A = 0
         
-        performance_traj = np.zeros(n_episodes)
-
-        state, _ = env.reset()
-
-        for i in range(n_episodes):
+        #print("-----------------BEGIN EPISODE ------------------------------    ")
+        for t in range(len(episode) -1, -1, -1):
             
-            if epsilon_schedule is not None:    #only if epsilon is used
-                self.eps = epsilon_schedule.decay() # it decays over episodes
+            state, action, reward = episode[t]
 
-            done = False
-            keep = True
+            if t != len(episode) -1:
+                next_state = episode[t+1][0]
 
-            self.e_parameters = defaultdict(float)
-            self.e_value = defaultdict(float)
+                delta = reward + self.gamma*self.value[next_state] - self.value[state]
+            else:
 
-            env.reset()
-            state = bracketer.bracket(env._get_obs())
-            
-            action = self.get_action_during_learning(state)
+                delta = reward - self.value[state]
 
-            episode = []
+            A = delta + self.gamma*self.Lambda*A
+            #if t != len(episode) -1:
+                #print(f"time: {t} v[s] = {self.value[state]} v[s'] = {self.value[next_state]} r = {reward}  d = {delta}  A = {A}")
+            #else:
+                #print(f"time: {t} v[s] = {self.value[state]} r = {reward}  d = {delta}  A = {A}")
+            #update the value
 
-            while not done and keep:
+            self.value[state] += self.lr_v*A
 
-                new_s, reward, done, trunc, inf = env.step(action)
-
-                if inf != {}:       #if inf is not empty => the action performed is NOT the action intended(it was unfeasible)
-                    action = inf["act"]
-                new_s = bracketer.bracket(new_s)
-                
-                # Keeps track of performance for each episode
-                performance_traj[i] += reward
-
-                episode.append((state, action, reward))
-
-                possible_actions = env.get_possible_actions(action)
-                new_a = self.get_action_during_learning(new_s, possible_actions=possible_actions)
-
-                
-                if self.update_at == "step":
-                    self.single_step_update(state, action, reward, new_s, new_a, done)
-                
-                action = new_a
-                state = new_s
-
-                keep = env.render()
-            
-            if self.update_at == "episode":
-                self.single_episode_update(episode)
-            
-
-            if i % 100 == 0:
-                clear_output(wait=False)
-                if epsilon_schedule is not None:    #only if epsilon is used
-                    print(f"Episode {i}/{n_episodes} : epsilon {self.eps}")
+            # Update the parameters
+            #print("------------param before------------")
+            for a in range(self.action_space):
+                if a == action:  #for the performed action
+                    self.parameters[(*state, a)] += self.lr_a*A*(1-self.policy(action, state))
                 else:
-                    print(f"Episode {i}/{n_episodes}")
+                    self.parameters[(*state, a)] += self.lr_a*A*( -self.policy(action, state))
+                #print(self.parameters[(*state, a)])
 
-
-           
-
-        print("\n\nLearning finished\n\n")
-        for i in range(len(performance_traj)):
-            if i % 100 == 0 and i != 0:
-                print(f"Episode {i} : Average performance {np.mean(performance_traj[i-100:i])}")
-
-        print("Final policy: ")
-        for s in self.value:
-            print("food")
-            if s[0] == 1:
-                print("N")
-            if s[1] == 1:
-                print("S")
-            if s[2] == 1:
-                print("O")
-            if s[3] == 1:
-                print("E")
-
-            print("  ", s[4])
-            print(f"{s[5]}     {s[7]}")
-            print("  ", s[8])
-
-            print("    ", f"{self.policy(0, s):.2f}")
-            print(f"{self.policy(2, s):.2f}      {self.policy(3, s):.2f}")
-            print("    ", f"{self.policy(1, s):.2f}")
-            print("-----------------------------------")
-            
-        env.close()
-
-
-    def name(self):
-        return "AtariDQL"
-
-
-    def save(self, path):
-        super().save(path)
-        torch.save(self.atari_target.state_dict(), path)
-
-
-    def upload(self, path):
-        self.atari_target.load_state_dict(torch.load(path))
-        self.atari_target.eval()
-
+            #for numerical stability, we subtract from the parameters their max value
+            #print("----------------par after----------------")
+            max_parameter = np.max( [self.parameters[(*state, a)]   for a in range(self.action_space)])
+            for a in range(self.action_space):
+                self.parameters[(*state, a)] -= float(max_parameter)
+                #print(self.parameters[(*state, a)])
+        
+        
 
 if __name__ == "__main__":
     
     # General Settings 
     gamma = 0.99
     lr_v = 0.15
+    lr_a = 0.01
     n_episodes = 2500
     env = SnakeEnv(render_mode="nonhuman", max_step=1000)
-    Q_p = Montecarlo(env.action_space.n, gamma=gamma, lr_v=lr_v)
-
-    print(Q_p.update_at)
+    L = GAE(env.action_space.n, gamma=gamma, lr_v=lr_v, lr_a=lr_a, Lambda=0.95)
+    
+   
 
 

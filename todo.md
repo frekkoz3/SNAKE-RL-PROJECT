@@ -20,4 +20,8 @@ Work on the technical details. Fix the protocol for all classes and the project 
 Work on the DQL.
  
 #### Ruben:
-Work on the Policy Gradient.
+Work on the Policy Gradient. Scrivi su project:
+1) spiega GAE
+2) spiega lr, mostrando che se è troppo alto pi collassa nella dir sbagliata
+3) mostrare che GAE raggiunge un platou (ottimo?)
+4) mostrare differenza tra actorcritic(on line) e GAE (update fine epoca) 

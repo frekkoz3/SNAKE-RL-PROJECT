@@ -744,19 +744,22 @@ class PolicyGradient(RLAlgorithm):
         self.parameters = np.zeros((2**bracketer.get_state_dim()) * 4)
         self.powers = 2 ** np.arange(bracketer.get_state_dim())        #for index convertion in get_index_sa
 
-    def index_sa(self, sa):
-        index = np.dot(self.powers, sa[:-1])    #the state is a string of 0 and 1, we get the base2 number
-        index = index*4 + sa[-1]                #every state has 4 actions, found in the last element of (*state, action)
+    def index_sa(self, state_action):
+        """
+            Retrieve the index of a certain state_action key (it is in the form of tuple).
+        """
+        index = np.dot(self.powers, state_action[:-1])    #the state is a string of 0 and 1, we get the base2 number
+        index = index*4 + state_action[-1]                #every state has 4 actions, found in the last element of (*state, action)
         
         return int(index)
 
     def policy(self, action, state):
-        # This functions performes the Softmax, obtaining prob(A = action | S = state ) = exp( parameters(s, a) )  /  (normaliz. factor over actions)
-
+        """
+            This functions performes the Softmax, obtaining prob(A = action | S = state ) = exp( parameters(s, a) )  /  (normaliz. factor over actions)
+        """
         return np.exp(self.parameters[self.index_sa((*state, action))])  /  sum(  np.exp(self.parameters[self.index_sa((*state, a))])  for a in range(self.action_space)  )
 
     def get_action_during_learning(self, state, possible_actions=None):     
-    
         prob_a = np.zeros(self.action_space)
 
         for a in range(self.action_space):
@@ -773,7 +776,6 @@ class PolicyGradient(RLAlgorithm):
     #use the following function with the bracketer NeighPlusFoodDIrection(neigh="V", radius=1)  
     #!!!
     def play_perfect_policy(self, env, bracketer):
-        
         done = False
         keep = True
         total_reward = 0

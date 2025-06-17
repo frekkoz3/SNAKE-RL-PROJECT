@@ -8,6 +8,8 @@ from collections import defaultdict, deque
 import pickle
 from IPython.display import clear_output
 import matplotlib.pyplot as plt
+import plotly.graph_objects as go
+
 import signal
 import sys
 
@@ -16,7 +18,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from utils import *
 from eligibility_traces import *
-    
+
 class DQN(nn.Module):
     """
     Deep Q_network for approximating Q-values.
@@ -217,7 +219,6 @@ class RLAlgorithm:
 
         action = None
 
-
         while not done and keep:
             possible_actions = env.get_possible_actions(action)
             action = self.get_action_during_evaluation(state, possible_actions)
@@ -249,9 +250,24 @@ class RLAlgorithm:
         
         n_moving_average = 60
         average_performance = np.convolve(self.performance_traj, np.ones(n_moving_average)/n_moving_average, mode='valid')
-        plt.plot(average_performance)
-        plt.title("Performance for episode")
-        plt.show()
+
+        fig = go.Figure()
+
+        fig.add_trace(go.Scatter(
+            y=average_performance,
+            mode='lines',
+            name='Average Performance'
+        ))
+
+        fig.update_layout(
+            title='Performance for episode',
+            xaxis_title='Episode',
+            yaxis_title='Performance',
+            template='plotly_white'
+        )
+
+        fig.show()
+
 
     def __str__(self):
         return ""
@@ -600,8 +616,8 @@ class DeepDoubleQLearning(RLAlgorithm):
         torch.save(self.dqn_target.state_dict(), path)
 
 
-    def upload(self, path):
-        self.dqn_target.load_state_dict(torch.load(path))
+    def upload(self, path, map_location='cpu'):
+        self.dqn_target.load_state_dict(torch.load(path, map_location=map_location))
         self.dqn_target.eval()
 
 

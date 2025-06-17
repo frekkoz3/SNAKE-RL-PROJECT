@@ -132,7 +132,7 @@ def discount_cumsum(x, discount):
     return scipy.signal.lfilter([1], [1, float(-discount)], x[::-1], axis=0)[::-1]
 
 
-def get_model_average_score(model_name, action_space, gamma, lr_v, model_path, bracketer, num_episodes=100, render_mode='nonhuman', **kwargs):
+def get_model_average_performance(model_name, action_space, gamma, lr_v, model_path, bracketer, num_episodes=100, render_mode='nonhuman', **kwargs):
     """
     Computes the average score of a model over a number of episodes.
     """
@@ -190,13 +190,18 @@ def get_model_average_score(model_name, action_space, gamma, lr_v, model_path, b
         return None
 
     total_rewards = 0
+    total_food = 0
 
     for episode in range(num_episodes):
         clear_output(wait=False)
         print(f'Episode {episode + 1}/{num_episodes}')
         total_rewards += model.play(env=env, bracketer=bracketer)
+        total_food += env.get_score()
 
-    return total_rewards / num_episodes
+    avg_reward = total_rewards / num_episodes
+    avg_eaten_food = total_food / num_episodes
+
+    return avg_reward, avg_eaten_food
 
 
 

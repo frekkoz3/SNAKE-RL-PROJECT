@@ -34,10 +34,11 @@ class SnakeEnv(gym.Env):
         self.window = None
         self.clock = None
         self.total_step = 0
+        self.score = 0         # used to count number of food eaten during playing
         self.max_step = max_step
         self.reset()
         if kwargs == {}:
-            self.reward_food = 10
+            self.reward_food = 20
             self.reward_death = -10
             self.reward_step = -0.5
         else:
@@ -95,6 +96,9 @@ class SnakeEnv(gym.Env):
         forbidden_action = {0:1, 1:0, 2:3, 3:2}[action]  # Prevent reversing direction
         possible_actions = [i for i in range(self.action_space.n) if i != forbidden_action]
         return possible_actions
+
+    def get_score(self):
+        return self.score
 
     def step(self, action):
         """

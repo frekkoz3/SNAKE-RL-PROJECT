@@ -734,35 +734,89 @@ class AtariDQL(DeepDoubleQLearning):
 
 class PolicyGradient(RLAlgorithm):
 
-    def __init__(self, action_space, gamma, lr_a):
+    def __init__(self, action_space, gamma, lr_a, bracketer):
         super().__init__(action_space)
 
         self.gamma = gamma
         self.lr_a = lr_a
         
-        self.parameters = defaultdict(float)
+        
+        self.parameters = np.zeros((2**bracketer.get_state_dim()) * 4)
+        self.powers = 2 ** np.arange(bracketer.get_state_dim())        #for index convertion in get_index_sa
+
+    def index_sa(self, sa):
+        index = np.dot(self.powers, sa[:-1])    #the state is a string of 0 and 1, we get the base2 number
+        index = index*4 + sa[-1]                #every state has 4 actions, found in the last element of (*state, action)
+        
+        return int(index)
 
     def policy(self, action, state):
+        # This functions performes the Softmax, obtaining prob(A = action | S = state ) = exp( parameters(s, a) )  /  (normaliz. factor over actions)
 
-        complete_subkey(dictionary=self.parameters, sub_key=state, default=[i for i in range (self.action_space)])
-
-        return np.exp(self.parameters[(*state, action)])  /  sum(  np.exp(self.parameters[(*state, a)])  for a in range(self.action_space)  )
+        return np.exp(self.parameters[self.index_sa((*state, action))])  /  sum(  np.exp(self.parameters[self.index_sa((*state, a))])  for a in range(self.action_space)  )
 
     def get_action_during_learning(self, state, possible_actions=None):     
-        #policy(a | s) = p(A = a|S = s) = softmax(parameters) = exp( parameters[(*s, a)] )  /  (normaliz. factor over actions)
-
-        complete_subkey(dictionary=self.parameters, sub_key=state, default=[i for i in range (self.action_space)])
     
         prob_a = np.zeros(self.action_space)
 
         for a in range(self.action_space):
-            prob_a[a] = np.exp(self.parameters[(*state, a)])  /  sum(  np.exp(self.parameters[(*state, ap)])  for ap in range(self.action_space)  )  
+            prob_a[a] = self.policy(a, state)       #we construct the probability distribution of actions following the policy in the current state 
         
-        chosen_action = np.random.choice(range(self.action_space), p=prob_a)
+        chosen_action = np.random.choice(range(self.action_space), p=prob_a)     #we choose an action following the distribution "prob_a"
         return chosen_action
         
     def get_action_during_evaluation(self, state, possible_actions=None):
+        #no difference from learning for Policy Gradient algorithms
         return self.get_action_during_learning(state, possible_actions=possible_actions)
+    
+    #!!!
+    #use the following function with the bracketer NeighPlusFoodDIrection(neigh="V", radius=1)  
+    #!!!
+    def play_perfect_policy(self, env, bracketer):
+        
+        done = False
+        keep = True
+        total_reward = 0
+
+        state, _ = env.reset()
+        state = bracketer.bracket(state)
+
+        action = None
+
+
+        while not done and keep:
+
+            fn, fs, fw, fe, tn, tw, _, te, ts = state
+            if fn == 1 and tn == 0:
+                action  = 0  #N
+            elif fs == 1 and ts == 0:
+                action  = 1  #S
+            elif fw == 1 and tw == 0:
+                action  = 2  #w   
+            elif fe == 1 and te == 0:
+                action  = 3  #E
+            else:
+                free_directions = 1-np.array([tn,ts,tw,te])
+                n_blocks = free_directions.sum()
+                
+                if n_blocks == 0:
+                    # All blocked: fallback — choose randomly
+                    action  = np.random.choice(self.action_space)
+                else:
+                    probs = free_directions / n_blocks
+                    action =  np.random.choice(range(self.action_space), p=probs)
+
+            
+            state, reward, done, trunc, inf = env.step(action)
+            state = bracketer.bracket(state)
+            
+            keep = env.render()
+
+            total_reward += reward
+
+        env.close()
+
+        return total_reward
 
     def save(self, path):
         with open(f"{path}.pkl", 'wb') as f:
@@ -771,13 +825,19 @@ class PolicyGradient(RLAlgorithm):
     def upload(self, path):
         with open(f"{path}.pkl", 'rb') as f:
             self.parameters = pickle.load(f)
-
+    
+    #This function shows the policy for each state
     def print_results_learning(self):
 
         super().print_results_learning()
-
+        
         print("Final policy: ")
-        for s in self.value:
+        for i in range(len(self.parameters)//4):       #i scans the index of all states
+            s = [int(bit) for bit in f"{i:0{len(self.powers)}b}"]       #we get the state connected with index i
+    
+            if i > 1023:
+                break
+
             print("food")
             if s[0] == 1:
                 print("N")
@@ -812,130 +872,91 @@ class PolicyGradient(RLAlgorithm):
             print(f"{self.policy(2, s):.2f}      {self.policy(3, s):.2f}")
             print("    ", f"{self.policy(1, s):.2f}")
             print("-----------------------------------")
-
+     
+    
 class ActorOnly(PolicyGradient):
 
     def single_episode_update(self, episode):
-        # After the episode ends, we update the policy
-        # The policy is parametriced via soft-max, and theta is a vector with entries for every couple bin-action
+        # After the episode ended, we update the policy
+        # The policy is parametrized via soft-max, and theta is a vector with entries for every couple bin-action
         G = 0
         for state, action, reward in reversed(episode):
             G = reward + self.gamma * G
 
             # Update the parameters
+            #                                       1 - pi(a|s)   if a is the performed action
+            # we recall that grad log(pi(a|s)) = 
+            #                                       - pi(a|s)     else
+
             for a in range(self.action_space):
                 if a == action:  #for the performed action
-                    self.parameters[(*state, a)] += self.lr_a*G*(1-self.policy(action, state))
+                    self.parameters[self.index_sa((*state, a))] += self.lr_a*G*(1-self.policy(action, state))
                 else:
-                    self.parameters[(*state, a)] += self.lr_a*G*( -self.policy(action, state))
+                    self.parameters[self.index_sa((*state, a))] += self.lr_a*G*( -self.policy(action, state))
 
             #for numerical stability, we subtract from the parameters their max value
-            max_parameter = np.max( [self.parameters[(*state, a)]   for a in range(self.action_space)])
+            max_parameter = np.max( [self.parameters[self.index_sa((*state, a))]   for a in range(self.action_space)])
             for a in range(self.action_space):
-                self.parameters[(*state, a)] -= float(max_parameter)
+                self.parameters[self.index_sa((*state, a))] -= float(max_parameter)
 
 class ActorCritic(PolicyGradient):
 
-    def __init__(self, action_space, gamma, lr_a, lr_v):
-        super().__init__(action_space, gamma, lr_a)
+    def __init__(self, action_space, gamma, lr_a, lr_v, bracketer):
+        super().__init__(action_space, gamma, lr_a, bracketer)
 
         self.lr_v = lr_v
-        self.value = defaultdict(float)
+        self.value = np.zeros(2**bracketer.get_state_dim())
+
+    def index_s(self, s):
+        index = np.dot(self.powers, s)    #the state in a string of 0 and 1, we get the base2 number
+        return int(index)
 
     def single_step_update(self, s, a, r, new_s, new_a, done):
-        # After the episode ends, we update the value and the policy
-        # The policy is parametriced via soft-max, and theta is a vector with entries for every couple bin-action
+        # After each step, we update the value and the policy
+        # The policy is parametrized via soft-max, and theta is a vector with entries for all pair state-action
 
         # critic update
         if done:   
-            delta = r + 0 - self.value[s]
+            delta = r + 0 - self.value[self.index_s(s)]
         else:
-            delta = r + self.gamma*self.value[new_s]    -    self.value[s]
+            delta = r + self.gamma*self.value[self.index_s(new_s)]    -    self.value[self.index_s(s)]
 
-        self.value[s] += self.lr_v*delta
+        self.value[self.index_s(s)] += self.lr_v*delta
 
         # actor update (parameters)
-
-        #complete_subkey(dictionary=self.parameters, sub_key=s, default=[i for i in range (self.action_space)])
-        
+        #                                       1 - pi(a|s)   if a is the performed action
+        # we recall that grad log(pi(a|s)) = 
+        #                                       - pi(a|s)     else
         for ap in range(self.action_space):
             if ap == a:  #for the performed action
-                self.parameters[(*s, ap)] += self.lr_a*delta*(1-self.policy(a, s))
+                self.parameters[self.index_sa((*s, ap))] += self.lr_a*delta*(1-self.policy(a, s))
             else:
-                self.parameters[(*s, ap)] += self.lr_a*delta*( -self.policy(a, s))
+                self.parameters[self.index_sa((*s, ap))] += self.lr_a*delta*( -self.policy(a, s))
 
         # For numerical stability, we subtract from the parameters their max value
-        max_parameter = np.max( [self.parameters[(*s, ap)]   for ap in range(self.action_space)])
+        max_parameter = np.max( [self.parameters[self.index_sa((*s, ap))]   for ap in range(self.action_space)])
         for ap in range(self.action_space):
-            self.parameters[(*s, ap)] -= float(max_parameter)
+            self.parameters[self.index_sa((*s, ap))] -= float(max_parameter)
 
-class ActorCriticLambda(PolicyGradient):
-    def __init__(self, action_space, gamma, lr_a, lr_v, Lambda):
-        super().__init__(action_space, gamma, lr_a)
-
-        self.lr_v = lr_v
-        self.value = defaultdict(float)
-        self.Lambda = Lambda
-        self.e_parameters = defaultdict(float)
-        self.e_value = defaultdict(float)
-
-    def single_step_update(self, s, a, r, new_s, new_a, done):
-        # After the episode ends, we update the value and the policy
-        # The policy is parametriced via soft-max, and theta is a vector with entries for every couple bin-action
-
-        # critic update
-        if done:   
-            delta = r + 0 - self.value[s]
-        else:
-            delta = r + self.gamma*self.value[new_s]    -    self.value[s]
-
-        for sp in self.e_value:
-            self.e_value[sp] = self.gamma*self.Lambda*self.e_value[sp]
-
-        self.e_value[s] +=  1
-        
-        for sp in self.e_value:
-            self.value[sp] += self.lr_v*delta*self.e_value[sp]
-
-        # actor update (parameters)
-
-        for s_a in self.e_parameters:
-            self.e_parameters[s_a] = self.gamma*self.Lambda*self.e_parameters[s_a]
-        
-        for ap in range(self.action_space):
-            if ap == a:  #for the performed action
-                self.e_parameters[(*s, ap)] += 1-self.policy(a, s)
-            else:
-                self.e_parameters[(*s, ap)] += -self.policy(a, s)
-
-        for s_a in self.e_parameters:
-            self.parameters[s_a] += self.lr_a*delta*self.e_parameters[s_a]
-
-
-        # For numerical stability, we subtract from the parameters their max value
-        for sp in self.value:
-            max_parameter = np.max( [self.parameters[(*sp, ap)]   for ap in range(self.action_space)])
-            for ap in range(self.action_space):
-                self.parameters[(*sp, ap)] -= float(max_parameter)
-
-    def single_episode_update(self, episode):
-
-        self.e_parameters = defaultdict(float)
-        self.e_value = defaultdict(float)
 
 class GAE(PolicyGradient):
-    def __init__(self, action_space, gamma, lr_a, lr_v, Lambda):
-        super().__init__(action_space, gamma, lr_a)
+    def __init__(self, action_space, gamma, lr_a, lr_v, Lambda, bracketer):
+        super().__init__(action_space, gamma, lr_a, bracketer)
 
         self.lr_v = lr_v
-        self.value = defaultdict(float)
+        self.value = np.zeros(2**bracketer.get_state_dim())
         self.Lambda = Lambda
+
+    def index_s(self, s):
+        index = np.dot(self.powers, s)    #the state in a string of 0 and 1, we get the base2 number
+        return int(index)
+
     def single_episode_update(self, episode):
-        # After the episode ends, we update the policy
-        # The policy is parametriced via soft-max, and theta is a vector with entries for every couple bin-action
-        A = 0
+        # After the episode ended, we update the value and the policy
+        # The policy is parametrized via soft-max, and theta is a vector with entries for every couple bin-action
+
+        GAE = 0       # GAE is a variable used to store the Generalized Advantage Estimator for all t 
         
-        #print("-----------------BEGIN EPISODE ------------------------------    ")
         for t in range(len(episode) -1, -1, -1):
             
             state, action, reward = episode[t]
@@ -943,36 +964,34 @@ class GAE(PolicyGradient):
             if t != len(episode) -1:
                 next_state = episode[t+1][0]
 
-                delta = reward + self.gamma*self.value[next_state] - self.value[state]
+                delta = reward + self.gamma*self.value[self.index_s(next_state)] - self.value[self.index_s(state)]
             else:
 
-                delta = reward - self.value[state]
+                delta = reward - self.value[self.index_s(state)]
 
-            A = delta + self.gamma*self.Lambda*A
-            #if t != len(episode) -1:
-                #print(f"time: {t} v[s] = {self.value[state]} v[s'] = {self.value[next_state]} r = {reward}  d = {delta}  A = {A}")
-            #else:
-                #print(f"time: {t} v[s] = {self.value[state]} r = {reward}  d = {delta}  A = {A}")
+            GAE = delta + self.gamma*self.Lambda*GAE        #GAE is overwritten at each step, and we have GAE = GAE(t)
+            
             #update the value
 
-            self.value[state] += self.lr_v*A
+            self.value[self.index_s(state)] += self.lr_v*GAE
 
             # Update the parameters
-            #print("------------param before------------")
+            #                                       1 - pi(a|s)   if a is the performed action
+            # we recall that grad log(pi(a|s)) = 
+            #                                       - pi(a|s)     else
+
             for a in range(self.action_space):
                 if a == action:  #for the performed action
-                    self.parameters[(*state, a)] += self.lr_a*A*(1-self.policy(action, state))
+                    self.parameters[self.index_sa((*state, a))] += self.lr_a*GAE*(1-self.policy(action, state))
                 else:
-                    self.parameters[(*state, a)] += self.lr_a*A*( -self.policy(action, state))
-                #print(self.parameters[(*state, a)])
+                    self.parameters[self.index_sa((*state, a))] += self.lr_a*GAE*( -self.policy(action, state))
+                
 
             #for numerical stability, we subtract from the parameters their max value
-            #print("----------------par after----------------")
-            max_parameter = np.max( [self.parameters[(*state, a)]   for a in range(self.action_space)])
+            
+            max_parameter = np.max( [self.parameters[self.index_sa((*state, a))]   for a in range(self.action_space)])
             for a in range(self.action_space):
-                self.parameters[(*state, a)] -= float(max_parameter)
-                #print(self.parameters[(*state, a)])
-        
+                self.parameters[self.index_sa((*state, a))] -= float(max_parameter)
         
 
 if __name__ == "__main__":

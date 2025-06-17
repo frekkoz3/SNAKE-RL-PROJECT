@@ -134,7 +134,8 @@ def discount_cumsum(x, discount):
 
 def get_model_average_performance(model_name, action_space, gamma, lr_v, model_path, bracketer, num_episodes=100, render_mode='nonhuman', **kwargs):
     """
-    Computes the average score of a model over a number of episodes.
+    Computes the average performance of a given model over a number of episodes.
+    In particular, it computes the average reward and the average number of food eaten.
     """
 
     assert num_episodes > 0, "Number of episodes must be greater than 0."
@@ -145,6 +146,7 @@ def get_model_average_performance(model_name, action_space, gamma, lr_v, model_p
         print(f'Model {model_name} is not supported. Supported models are: {model_types}.\nReturning...')
         return None
 
+    # Define the model given model_name
     if model_name == 'DDQL':
         if len(kwargs) < 5:
             print('Not enough parameters for Deep Double Q-Learning. Returning...')
@@ -183,6 +185,7 @@ def get_model_average_performance(model_name, action_space, gamma, lr_v, model_p
     elif model_name == 'MC':
         model = alg.Montecarlo(action_space=action_space, gamma=gamma, lr_v=lr_v)
 
+    # Upload the model if it exists
     try:
         model.upload(model_path)
     except Exception as e:

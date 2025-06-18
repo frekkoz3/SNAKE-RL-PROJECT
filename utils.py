@@ -140,7 +140,8 @@ def get_model_average_performance(model_name, action_space, gamma, lr_v, model_p
 
     assert num_episodes > 0, "Number of episodes must be greater than 0."
     model_types = ['DDQL', 'QLearning', 'SARSA', 'MC']
-    env = SnakeEnv(render_mode=render_mode)
+    # max_step is 10000, empirically it means that the snake will always die before the end of the episode
+    env = SnakeEnv(render_mode=render_mode, max_step=10000)
 
     if model_name not in model_types:
         print(f'Model {model_name} is not supported. Supported models are: {model_types}.\nReturning...')

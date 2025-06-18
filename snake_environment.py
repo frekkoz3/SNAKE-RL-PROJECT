@@ -38,8 +38,8 @@ class SnakeEnv(gym.Env):
         self.max_step = max_step
         self.reset()
         if kwargs == {}:
-            self.reward_food = 10
-            self.reward_death = -10
+            self.reward_food = 20
+            self.reward_death = -5
             self.reward_step = -0.5
         else:
             self.reward_food = kwargs["reward_food"]

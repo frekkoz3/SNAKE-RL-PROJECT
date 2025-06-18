@@ -603,10 +603,6 @@ class DeepDoubleQLearning(RLAlgorithm):
         # Increment the iteration counter
         self.iterations += 1
 
-    
-    def name(self):
-        return "DDQL"
-
 
     def save(self, path):
         super().save(path)
@@ -618,116 +614,8 @@ class DeepDoubleQLearning(RLAlgorithm):
         self.dqn_target.eval()
 
 
-class AtariDQL(DeepDoubleQLearning):
-    """
-    This class implements the DDQL using an Atari-like structure
-    It uses convolutional layers to process the input state.
-    """
-
-    def __init__(self, action_space, gamma, lr_v, n_layers, height, width, batch_size=32, memory_size=10000, target_update_freq=1000, device='cpu'):
-        super().__init__(action_space, gamma, lr_v, n_layers*height*width, batch_size, memory_size, target_update_freq, device)
-
-        self.n_layers = n_layers
-        self.recent_history = deque(maxlen=n_layers)
-
-        self.dqn_online = ConvolutionalDQN(action_dim=action_space, n_layers=n_layers, height=height, width=width).to(self.device)
-        self.dqn_target = ConvolutionalDQN(action_dim=action_space, n_layers=n_layers, height=height, width=width).to(self.device)
-        self.dqn_target.load_state_dict(self.dqn_online.state_dict())
-        self.dqn_target.eval()
-
-        self.optimizer = torch.optim.Adam(self.dqn_online.parameters(), lr=self.lr_v)
-
-    def get_action_during_learning(self, s, possible_actions=None):
-        
-        #   Chooses action at random using an epsilon-greedy policy wrt the current Q(s,a).
-        #   It also automatically complete the dictionary for the state with all possible actions.
-       
-        complete_subkey(self.Qvalues, s, default=[i for i in range (self.action_space)])
-        ran = np.random.rand()
-        
-        if (ran < self.eps):
-            prob_actions = np.ones(self.action_space)/self.action_space
-        else:
-            prob_actions = np.zeros(self.action_space)
-            prob_actions[argmax_over_dict_given_subkey(self.Qvalues, (*s, ), default=[i for i in range (self.action_space)])[-1]] = 1
-            
-        # take one action from the array of actions with the probabilities as defined above.
-        a = np.random.choice(self.action_space, p=prob_actions)
-        return a 
-
-    def get_action_during_evaluation(self, s, possible_action = None):
-        #   Return the action from the greedy policy.
-        #  If there are no possible action it firstly complete the subkey and then excract one action.
-        
-        if possible_action is None:
-            complete_subkey(self.Qvalues, s, default=[i for i in range (self.action_space)])
-            a = argmax_over_dict_given_subkey(self.Qvalues, (*s, ), default=[i for i in range (self.action_space)])[-1]
-        else:
-            a = argmax_over_dict_given_subkey_and_possible_action(self.Qvalues, (*s, ), possible_action, default=[i for i in range (self.action_space)])[-1]
-        return a
-
-    def single_step_update(self, s, a, r, new_s, new_a, done):
-        """
-        TODO: è DA SISTEMARE UN PO' QUESTO METODO.
-        """
-
-        # Update the recent history
-        self.recent_history.append((s, a, r, new_s, done))
-
-        # if the recent history is full, add to the memory
-        if len(self.recent_history) == self.n_layers:
-            # Convert the recent history to a state
-            state = np.array([self.recent_history[i][0] for i in range(self.n_layers)])
-            action = self.recent_history[-1][1]
-            reward = self.recent_history[-1][2]
-            new_state = np.array([self.recent_history[i][3] for i in range(self.n_layers)])
-            done = self.recent_history[-1][4]
-
-            # Store the transition in memory
-            self.memory.append((state, action, reward, new_state, done))
-
-        if len(self.memory) < 2*self.batch_size:
-            return
-
-        states, actions, rewards, next_states, dones = self.memory.sample()
-
-        states = torch.tensor(states, dtype=torch.float32, device=self.device)
-        actions = torch.tensor(actions, dtype=torch.int64, device=self.device).unsqueeze(1)
-        rewards = torch.tensor(rewards, dtype=torch.float32, device=self.device)
-        next_states = torch.tensor(next_states, dtype=torch.float32, device=self.device)
-        dones = torch.tensor(dones, dtype=torch.float32, device=self.device)
-
-        # Compute Q-values for the current states using the ONLINE DQN
-        current_q_values = self.dqn_online(states).gather(1, actions).squeeze(1)
-
-        next_actions = self.dqn_online(next_states).argmax(1, keepdim=True)
-
-
-        # Compute Q-values for the next states using the TARGET DQN
-        with torch.no_grad():
-            # Get the best action given the next states using the ONLINE DQN
-            # Compute the Q-values for the next states using the TARGET DQN
-            next_q_values = self.dqn_target(next_states).gather(1, next_actions).squeeze(1)
-
-            # Compute the expected q_values
-            target_q_values = rewards + self.gamma * next_q_values * (1 - dones)
-
-        # Compute the loss
-        loss = F.mse_loss(current_q_values, target_q_values)
-
-        # Update the online DQN
-        self.optimizer.zero_grad()
-        loss.backward()
-        self.optimizer.step()
-
-        # Update the target DQN every `self.target_update_freq` iterations
-        if self.iterations % self.target_update_freq == 0:
-            self.dqn_target.load_state_dict(self.dqn_online.state_dict())
-
-        # Increment the iteration counter
-        self.iterations += 1
-
-
+    def name(self):
+        return "DDQL"
 
 
 class PolicyGradient(RLAlgorithm):

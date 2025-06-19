@@ -180,7 +180,7 @@ def get_model_average_performance(model_name, action_space, gamma, lr_v, model_p
 
     total_rewards = 0
     total_food = 0
-    freq_food = np.zeros(22)
+    freq_food = np.zeros(52)
 
     for episode in range(num_episodes):
         clear_output(wait=False)
@@ -188,10 +188,10 @@ def get_model_average_performance(model_name, action_space, gamma, lr_v, model_p
         total_rewards += model.play(env=env, bracketer=bracketer)
         score = env.get_score()
         total_food += score
-        if score <= 20:
+        if score <= 50:
             freq_food[score] += 1
         else:
-            freq_food[21] += 1
+            freq_food[51] += 1
 
     avg_reward = total_rewards / num_episodes
     avg_eaten_food = total_food / num_episodes

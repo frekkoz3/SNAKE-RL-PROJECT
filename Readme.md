@@ -9,27 +9,28 @@ Bredariol Francesco, Savorgnan Enrico, Tic Ruben
 
 ---
 
-Here we try to solve the Snake game using different approaches.
+Our goal is to solve the Snake game using different approaches. \
+For more information, please consider looking at ```project.ipynb```
 
 ---
 ## Structure
+- `project.ipynb`
+  - This is the main jupyter of the project. It contains most of the information about the algorithms implemented and the choices made.
 
-- `main.py`
-  - This is the main file. Currently just runs a SARSA agent for the Snake game. 
-  - Probably to update
-  
 
-- `main.ipynb`
-  - This notebook runs a QLearning Agent and a SARSA Agent, saving the results in `models/` folder.
+- `training.ipynb`
+  - This is the notebook made for training the models. It is quite poor of details but straightforward  
 
 
 - `algorithms.py`
   - Defines the superclass **RLAlgorithm** which defines the main methods for the specific algorithms that are built upon it.
-  - Algorithm s currently implemented:
-    - **QLearning**
+  - Algorithms implemented:
+    - **Q-Learning**
     - **SARSA**
-  - Algorithms to implement:
-    - **Double QLearning**
+    - **MonteCarlo**
+    - **Double Deep Q-Learning**
+    - **Actor-Critic**
+    - **GAE**
     
 
 - `snake_environment.py`
@@ -42,18 +43,29 @@ Here we try to solve the Snake game using different approaches.
     - `reset()`: resets the environment to the initial state.
 
 
+- `utils.py`
+  - Defines many methods useful for training and evaluating models, such as *max* and *argmax* functions 
+
+
 - `states_bracket.py`
-  - This file defines a class **StateBracket** which, given a state, is able to retun the most similar "super-state"
+  - This file defines a class **StateBracket** which, given a state, is able to retun the most similar "super-state".
+
+
+- `eligibility_traces.py`
+  - Defines the eligibility trace method for SARSA(λ).
+
+
+- `epsilon_scheduler.py`
+  - Defines several methods for a decreasing Ɛ used in ε-greedy policies:
+    - **constant epsilon**
+    - **linear epsilon decay**
 
 
 - `models/`
   - This folder contains the saved models of the algorithms.
 
 
---- 
-## TODO
-- Implement Monte Carlo
-- Implement Double QLearning
-- Implement dynamic parameters
-- Implement dynamic learning bracket
+- `images/`
+  - This folder contains the all the images of both the presentation and of `project.ipynb`
+
 
